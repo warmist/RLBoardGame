@@ -2,11 +2,7 @@
 #include "console.hpp"
 #include <algorithm>
 #include <queue>
-//enum_helper_define(entity_type, misc, worker);
 
-const float eps = 0.00001f;
-const float dist_interact =15.0f;
-const float dir_close = 0.2f;
 map::map(int w, int h) :static_layer(w,h)
 {
 }

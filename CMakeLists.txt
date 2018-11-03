@@ -35,6 +35,8 @@ include_directories(${PROJECT_BINARY_DIR})
 #embed_file("${PROJECT_SOURCE_DIR}/assets/Paul_10x10.png")
 embed_file("${PROJECT_SOURCE_DIR}/assets/cp437_12x12.png")
 
+SET(LUA "../luajit" CACHE PATH "Path to lua")
+
 SET(PROJECT_HEADERS
     src/common.hpp
     src/console.hpp
@@ -46,6 +48,8 @@ SET(PROJECT_HEADERS
     src/miniz.h
 	src/action.hpp
 	src/gui.hpp
+    ${LUA}/lua.hpp
+    ${LUA}/lualib.h
 	)
 
 SET(PROJECT_SOURCES
@@ -55,7 +59,10 @@ SET(PROJECT_SOURCES
     src/miniz.c
     src/gui.cpp
 	)
-add_executable(${TARGET_NAME} src/main.cpp ${PROJECT_HEADERS} ${PROJECT_SOURCES} ${EMBEDDED_HDRS} ${EMBEDDED_LIBS})
+
+INCLUDE_DIRECTORIES(${LUA})
+
+add_executable(${TARGET_NAME} src/main.cpp ${PROJECT_HEADERS} ${PROJECT_SOURCES} ${EMBEDDED_HDRS} ${EMBEDDED_LIBS} ${LUA}/lua51.lib)
 
 target_link_libraries(${TARGET_NAME} ${SFML_LIBRARIES} ${SFML_DEPENDENCIES} )
 
