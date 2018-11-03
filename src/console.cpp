@@ -38,8 +38,8 @@ console::console(int w, int h, font_descriptor data,float scale) :w_(w),h_(h),fo
 	load_font(data);
     //auto glypt_w_ = abs(glypth_bounds_.left - glypth_bounds_.width);
     //auto glypt_h_ = abs(glypth_bounds_.top - glypth_bounds_.height);
-    
-    window_.create(sf::VideoMode(unsigned int(glypth_bounds_.width*w*scale_x_), unsigned int(glypth_bounds_.height *h*scale_y_)), "DoomedFactory. Version:" DOOMEDFACTORY_VERSION, sf::Style::Titlebar | sf::Style::Close);
+    //TODO: random gen edition of tacticus. Use boosters, boards etc as input seed
+    window_.create(sf::VideoMode(unsigned int(glypth_bounds_.width*w*scale_x_), unsigned int(glypth_bounds_.height *h*scale_y_)), "Tacticus. Version:" TACTICUS_VERSION, sf::Style::Titlebar | sf::Style::Close);
     window_.setFramerateLimit(20);
 
 	tiles_.resize(w,h);

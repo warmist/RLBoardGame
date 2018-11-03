@@ -1,6 +1,5 @@
 #include "map.hpp"
 #include "console.hpp"
-#include "e_furniture.hpp"
 #include <algorithm>
 #include <queue>
 //enum_helper_define(entity_type, misc, worker);
@@ -28,26 +27,10 @@ void map::render(console& trg, int start_x, int start_y, int draw_w, int draw_h,
             {
                 continue;
             }
-            trg.set_char(v2i(tx, ty), t.glyph(), t.color_fore(),t.color_back());
+            trg.set_char(v2i(tx, ty), t.glyph, t.color_fore,t.color_back);
         }
 
-	for (const auto& e : furniture)
-	{
-		if (!e || e->removed) continue;
-		v2i wp = e->pos + v2i(window_off_x, window_off_y);
-		v2i size = v2i(e->tiles.w, e->tiles.h);
-		//TODO: clip early if all offscreen @PERF
-		for (int ex = wp.x; ex < wp.x + size.x; ex++)
-			for (int ey = wp.y; ey < wp.y + size.y; ey++)
-			{
-				if (ex < 0 || ey < 0 || ex >= trg.w_ || ey >= trg.h_)
-					continue;
-				auto& t = e->tiles(ex - wp.x, ey - wp.y);
-				if (t.glyph == 0)
-					continue;
-				trg.set_char(v2i(ex, ey), t.glyph, t.color_fore, t.color_back);
-			}
-	}
+
 
     for (const auto& e : entities)
     {
@@ -93,80 +76,11 @@ void map::render(console& trg, int start_x, int start_y, int draw_w, int draw_h,
 
 std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
 {
-    auto f = [](dyn_array2d<tile>&m, int x, int y){return !test(m(x, y).flags(),tile_flags::block_move); };
+    auto f = [](dyn_array2d<tile_attr>&m, int x, int y){return !test(m(x, y).flags,tile_flags::block_move); };
 
     return pathfinding(static_layer, f, x, y, tx, ty);
 }
-struct plan_node
-{
-	action* act;
-	int next_node;
-};
-struct fifo_node
-{
-	std::vector<action_input_output> state;
-	action_input_output goal;
-	plan_node* node=nullptr;
-};
-bool map::is_rect_room_empty(recti r)
-{
-	for (auto& room : rooms)
-	{
-		auto ov = room.decorated().overlap(r);
-		if (ov.width() > 0 && ov.height() > 0)
-		{
-			return false;
-		}
-	}
-	return true;
-}
-std::vector<room_overlap> map::get_room_overlaps(recti r, int cur_id)
-{
-	std::vector<room_overlap> ret;
 
-	for (int i = 0; i<int(rooms.size()); i++)
-	{
-		if (i == cur_id)
-			continue;
-		auto ov=rooms[i].decorated().overlap(r);
-		if (ov.width() > 0 && ov.height() > 0)
-		{
-			ret.emplace_back(room_overlap{ ov,&rooms[i] });
-		}
-	}
-
-	return ret;
-}
-plan map::formulate_plan(entity * owner, action_input_output goal)
-{
-	std::queue<fifo_node> fifo;
-	std::vector<plan_node> action_graph;
-
-	fifo_node start;
-	start.goal = goal;
-	//todo: populate state from owner. E.g. owner could already be in some place etc...
-	fifo.push(start);
-
-	//iterate:
-	while(!fifo.empty())
-	{
-	//pop from fifo
-		auto c=fifo.back();
-		fifo.pop();
-	//get current goal, find all actions that give that goal
-		/*for (const auto& act : common_actions)
-		{
-			for(const auto& g:act.output)
-				if (g == c.goal)
-				{
-					
-				}
-		}*/
-	//add them to fifo
-	//do until finding an action that can be done already (i.e. preq matched) or fifo empty
-	}
-	return plan(); //empty plan, can't find anyway to reach the goal
-}
 void map::tick()
 {
 	for(auto& e: entities)
@@ -202,7 +116,7 @@ void map::tick()
 }
 bool map::is_passible(int x, int y)
 {
-    if (test(static_layer(x, y).flags(),tile_flags::block_move))
+    if (test(static_layer(x, y).flags,tile_flags::block_move))
         return false;
     /*auto& e = entities(x, y);
     if (e && test(e->flags, item_flags::blocks_move))
@@ -250,28 +164,12 @@ bool map::is_supported_any(int x, int y, int dirmask)
 
 void map::save(FILE * f)
 {
-	fprintf(f, "%d %d\n%lld\n", static_layer.w, static_layer.h,rooms.size());
-	for (auto& r : rooms)
-	{
-		r.save(f);
-		fprintf(f, "\n");
-	}
+	fprintf(f, "%d %d\n", static_layer.w, static_layer.h);
 }
 
 void map::load(FILE * f)
 {
 	int w, h;
-	size_t room_count;
-	fscanf(f, "%d %d\n%lld\n", &w, &h, &room_count);
+	fscanf(f, "%d %d\n", &w, &h);
 	static_layer.resize(w, h);
-	rooms.clear();
-	furniture.clear();
-	rooms.reserve(room_count);
-	for(size_t i=0;i<room_count;i++)
-	{
-		room r;
-		r.load(f);
-		r.place(*this);
-		rooms.push_back(r);
-	}
 }

@@ -9,9 +9,6 @@
 #include <array>
 #include <assert.h>
 
-#include "knowledge.hpp"
-#include "action.hpp"
-#include "room.hpp"
 
 struct entity;
 struct map;
@@ -24,15 +21,6 @@ enum class tile_flags
 };
 enum_helper_flags(tile_flags)
 
-enum class tile_type //NOTE: DO NOT FORGET TO UPDATE THE HELPER DECL!
-{
-	nothing,
-	floor,
-	wall,
-	glass,
-	entry, //temp way for units to enter map
-};
-enum_helper_decl(tile_type, nothing, entry);
 
 struct tile_attr
 {
@@ -42,36 +30,6 @@ struct tile_attr
 	tile_flags flags;
 };
 
-const tile_attr tile_attrs[] = {
-	{ v3f(0.05f, 0.05f, 0.05f)	,v3f(0, 0, 0),	   '.',tile_flags::block_move | tile_flags::block_sight, },
-	{ v3f(0, 0, 0)			,v3f(0.2f, 0.2f, 0.2f),'+',tile_flags::none, },
-	{ v3f(0, 0, 0)			,v3f(0.8f, 0.8f, 0.8f),'#',tile_flags::block_move | tile_flags::block_sight, },
-	{ v3f(0.8f, 0.8f, 0.8f)	,v3f(0.2f, 0.2f, 0.2f),'_',tile_flags::block_move, },
-	{ v3f(0, 0, 0)			,v3f(0.8f, 0.8f, 0.8f),'<',tile_flags::none },
-};
-
-static_assert(array_size(tile_attrs) == enum_size<tile_type>(), "Tile attrs must be same size as tile_types");
-
-struct tile
-{
-	tile_type t;
-	inline int glyph() const
-	{
-		return tile_attrs[static_cast<int>(t)].glyph;
-	}
-	inline v3f color_fore() const
-	{
-		return tile_attrs[static_cast<int>(t)].color_fore;
-	}
-	inline v3f color_back() const
-	{
-		return tile_attrs[static_cast<int>(t)].color_back;
-	}
-	inline tile_flags flags() const
-	{
-		return tile_attrs[static_cast<int>(t)].flags;
-	}
-};
 
 enum class entity_type
 {
@@ -117,10 +75,7 @@ struct furniture;
 typedef std::unique_ptr<furniture> furniture_ptr;
 
 typedef std::unique_ptr<entity> entity_ptr;
-struct room_overlap {
-	recti overlap;
-	room *other_room;
-};
+
 struct console;
 struct map
 {
@@ -128,23 +83,13 @@ struct map
 
     std::mt19937_64 rand;
 
-    dyn_array2d<tile> static_layer;
+    dyn_array2d<tile_attr> static_layer;
 
     std::vector<entity_ptr> entities;
-	std::vector<furniture_ptr> furniture;
-
-	std::vector<room> rooms;
-	
-	bool is_rect_room_empty(recti r);
-	std::vector<room_overlap> get_room_overlaps(recti r, int cur_id = -1);
-
-	plan formulate_plan(entity* owner, action_input_output goal);
 
 	void tick();
     
     void render(console& trg,int start_x,int start_y,int draw_w,int draw_h,int window_off_x,int window_off_y);
-    
-	
     std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
 
     //helper functions

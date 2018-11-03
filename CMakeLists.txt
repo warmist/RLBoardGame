@@ -44,12 +44,8 @@ SET(PROJECT_HEADERS
     src/pcg_uint128.hpp
     src/version.hpp
     src/miniz.h
-    src/worker.hpp
 	src/action.hpp
-	src/knowledge.hpp
-	src/e_furniture.hpp
 	src/gui.hpp
-    src/room.hpp
 	)
 
 SET(PROJECT_SOURCES
@@ -57,10 +53,7 @@ SET(PROJECT_SOURCES
     src/console.cpp
     src/map.cpp
     src/miniz.c
-    src/worker.cpp
     src/gui.cpp
-    src/room.cpp
-	src/e_furniture.cpp
 	)
 add_executable(${TARGET_NAME} src/main.cpp ${PROJECT_HEADERS} ${PROJECT_SOURCES} ${EMBEDDED_HDRS} ${EMBEDDED_LIBS})
 
