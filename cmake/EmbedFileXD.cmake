@@ -1,0 +1,8 @@
+function(embed_file files)
+	foreach(v ${files})
+		get_filename_component(filename ${v} NAME_WE)
+		string(CONCAT out_f ${filename} ".hpp")
+		string(MAKE_C_IDENTIFIER ${filename} filename_c)
+		add_custom_command(OUTPUT ${out_f} COMMAND ${XD_PATH} -d${filename_c} ${v} ${out_f})
+	endforeach()
+endfunction()
