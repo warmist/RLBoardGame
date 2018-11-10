@@ -93,6 +93,7 @@ public:
 		fore_(pos.x, pos.y) = sf::Color(sf::Uint8(foreground.x), sf::Uint8(foreground.y), sf::Uint8(foreground.z));
 		back_(pos.x, pos.y) = sf::Color(sf::Uint8(background.x), sf::Uint8(background.y), sf::Uint8(background.z));
 	}
+	
 	void invert_tile(v2i pos,bool do_back)
 	{
 		auto&f = fore_(pos.x, pos.y);
@@ -110,15 +111,24 @@ public:
 	}
 	void set_text(v2i pos, const std::string& s, v3f foreground = v3f(1,1,1), v3f background = v3f(0, 0, 0))
 	{
-		for (int i = 0; i < s.size() && i + pos.x<tiles_.w; i++)
+		v2i cpos = pos;
+		for (int i = 0; i < s.size() && cpos.x<tiles_.w; i++)
 		{
-			set_char(pos + v2i(i, 0), static_cast<unsigned char>(s[i]), foreground, background);
+			if (s[i] == '\n' || s[i] == '\r')
+			{
+				cpos.y++;
+				cpos.x = pos.x;
+				continue;
+			}	
+			set_char(cpos, static_cast<unsigned char>(s[i]), foreground, background);
+			cpos.x++;
 		}
 	}
 	void set_text_centered(v2i center_pos, const std::string& s, v3f foreground = v3f(1, 1, 1), v3f background = v3f(0, 0, 0))
 	{
 		set_text(center_pos - v2i(int(s.length()) / 2, 0), s, foreground, background);
 	}
+	
 	/*
     void set_fore(sf::Vector2i pos, sf::Color foreground)
     {

@@ -93,7 +93,7 @@ void draw_asciimap(console& con)
 }
 void set_tile(console& c, int x, int y, tile_attr t,bool is_red)
 {
-	c.set_char_safe(v2i(x, y), t.glyph, is_red?v3f(1.0f,0,0):t.color_fore, t.color_back);
+	c.set_char(v2i(x, y), t.glyph, is_red?v3f(1.0f,0,0):t.color_fore, t.color_back);
 }
 
 void load_map(map& m)
@@ -141,6 +141,50 @@ void dbg_init_world(map& m)
 		}
 	}
 }
+struct card
+{
+	std::string name;
+	std::string desc;
+
+	void render(console& c,int x, int y)
+	{
+		const float phi = (1.f + sqrt(5.f)) / 2.f;
+		const int h = 20;
+		const int w = int(h*phi);
+		
+
+		for (int i = 0; i < w; i++)
+		{
+			for (int j = 0; j < h; j++)
+			{
+				c.set_char(v2i(i + x, j + y), ' ');
+			}
+		}
+
+		for (int i = 0; i < w; i++)
+		{
+			c.set_char(v2i(x + i, y), tile_hline_double);
+			c.set_char(v2i(x + i, y + h - 1), tile_hline_double);
+		}
+		for (int i = 0; i < h; i++)
+		{
+			c.set_char(v2i(x, y + i), tile_vline_double);
+			c.set_char(v2i(x + w - 1, y + i), tile_vline_double);
+		}
+		c.set_char(v2i(x, y), tile_es_corner_double);
+		c.set_char(v2i(x + w - 1, y), tile_ws_corner_double);
+		c.set_char(v2i(x, y + h - 1), tile_ne_corner_double);
+		c.set_char(v2i(x + w - 1, y + h - 1), tile_wn_corner_double);
+
+		const int text_start = int(w / 2 - name.length() / 2);
+		c.set_text(v2i(x + text_start, y), name);
+		c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double);
+		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double);
+
+		const int desc_start_y = y + 2;
+		c.set_text(v2i(x + 2, desc_start_y), desc);
+	}
+};
 
 void game_loop(console& graphics_console, console& text_console)
 {
@@ -231,7 +275,11 @@ void game_loop(console& graphics_console, console& text_console)
 			//FIXME: @GLITCH when draggin sometimes you see an empty rect? Probably not redrawing empty space?
 			world.render(graphics_console, map_window_start_x, map_window_start_y, view_w, view_h, -map_window_start_x, -map_window_start_y);
 			//gui
+			card t_card;
+			t_card.name = "Strike";
+			t_card.desc = "Perform an attack with\nvery big sword";
 
+			t_card.render(graphics_console, 4, 4);
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 
 			graphics_console.render();
