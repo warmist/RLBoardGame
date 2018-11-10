@@ -82,7 +82,21 @@ struct state_map
 		add_state(tmp_state);
 	}
 };
-
+char to_hex_char(int c)
+{
+	if (c < 10)
+		return '0' + c;
+	else
+		return 'A' + c-10;
+}
+v2i get_mouse(console& con)
+{
+	auto b = con.get_glypht_size();
+	auto p = sf::Mouse::getPosition(con.get_window());
+	p.x /= b.x;
+	p.y /= b.y;
+	return v2i(p.x,p.y);
+}
 void draw_asciimap(console& con)
 {
     for(int i=0;i<16;i++)
@@ -90,6 +104,13 @@ void draw_asciimap(console& con)
         {
             con.set_char(v2i(i, j), (i + j * 16));
         }
+	auto p = get_mouse(con);
+	int id = p.x + p.y * 16;
+	char buf[3] = { 0 };
+	buf[0] = to_hex_char((id & 0xF0)>>4);
+	buf[1] = to_hex_char(id & 0xF);
+	std::string ps = "Mouse:" + std::to_string(p.x) + ", " + std::to_string(p.y) + " ->" + std::to_string(id)+"("+ buf+")";
+	con.set_text(v2i(0, 17), ps);
 }
 void set_tile(console& c, int x, int y, tile_attr t,bool is_red)
 {
@@ -141,17 +162,22 @@ void dbg_init_world(map& m)
 		}
 	}
 }
+constexpr float phi = 1.61803398874989484820f;
 struct card
 {
 	std::string name;
 	std::string desc;
-
+	static const int card_w = 15;
+	static const int card_h= int(card_w*phi);
 	void render(console& c,int x, int y)
 	{
-		const float phi = (1.f + sqrt(5.f)) / 2.f;
+		
+		/*
 		const int h = 20;
 		const int w = int(h*phi);
-		
+		*/
+		const int w = card_w;
+		const int h = card_h;
 
 		for (int i = 0; i < w; i++)
 		{
@@ -181,11 +207,49 @@ struct card
 		c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double);
 		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double);
 
-		const int desc_start_y = y + 2;
+		const int desc_start_y = y + 1;
 		c.set_text(v2i(x + 2, desc_start_y), desc);
 	}
 };
-
+struct card_hand
+{
+	std::vector<card> cards;
+	int selected_card=3;
+	
+	void render(console& c, int y)
+	{
+		//two ways to lay the cards out:
+		//if enough space dont overlap them and just put side by side from center
+		//if not enough space, start overlapping them
+		//still somehow need to ensure that there is not more than view_w cards as then you could not select a card :|
+		auto draw_cards = [&](int card_w,int skip_w) {
+			for (int i = int(cards.size()) - 1; i >= 0; i--)
+			{
+				if(i==selected_card)
+				{
+					//skip this card as we are going to draw it last
+				}
+				else
+					cards[i].render(c, card_w*i + skip_w, y);
+			}
+			if (selected_card >= 0 && selected_card < cards.size())
+			{
+				cards[selected_card].render(c, card_w*selected_card + skip_w, view_h - card::card_h);
+			}
+		};
+		bool is_crouded = cards.size()*card::card_w >= view_w;
+		if (is_crouded)
+		{
+			int card_size = view_w / int(cards.size());
+			draw_cards(card_size, 0);
+		}
+		else
+		{
+			int skip_space = (view_w - int(cards.size())*card::card_w) / 2;
+			draw_cards(card::card_w, skip_space);
+		}
+	}
+};
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -199,6 +263,13 @@ void game_loop(console& graphics_console, console& text_console)
 
 		state current_state = states.data["game_start"];
 
+		card_hand hand;
+		card t_card;
+		t_card.name = "Strike";
+		t_card.desc = "Cost      \xad\n\nAttack\nRange      0\nDmg      1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
+		for(int i=0;i<5;i++)
+			hand.cards.push_back(t_card);
+		
 		auto world = map(map_w, map_h);
 		dbg_init_world(world);
 		//int size_min = std::min(map_w, map_h);
@@ -245,7 +316,10 @@ void game_loop(console& graphics_console, console& text_console)
 					// shift+r -> reset
 					if (event.key.shift && (event.key.code == sf::Keyboard::R))
 						restart = true;
-					
+					if (event.key.code == sf::Keyboard::A)
+					{
+						hand.cards.push_back(t_card);
+					}
 				}
 				if (event.type == sf::Event::MouseMoved)
 				{
@@ -270,18 +344,14 @@ void game_loop(console& graphics_console, console& text_console)
 			//drawing part
 			//if (&text_console != &graphics_console)
 			//	text_console.clear_transperent();
-			graphics_console.clear(); //wtf?! not clearing stuff
+			graphics_console.clear(); //FIXME://wtf?! not clearing stuff
 
-			//FIXME: @GLITCH when draggin sometimes you see an empty rect? Probably not redrawing empty space?
 			world.render(graphics_console, map_window_start_x, map_window_start_y, view_w, view_h, -map_window_start_x, -map_window_start_y);
 			//gui
-			card t_card;
-			t_card.name = "Strike";
-			t_card.desc = "Perform an attack with\nvery big sword";
-
-			t_card.render(graphics_console, 4, 4);
+			
+			hand.render(graphics_console, view_h - 8);
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
-
+			//draw_asciimap(graphics_console);
 			graphics_console.render();
 			//if(&text_console!=&graphics_console)
 			//	text_console.render();

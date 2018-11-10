@@ -128,7 +128,10 @@ public:
 	{
 		set_text(center_pos - v2i(int(s.length()) / 2, 0), s, foreground, background);
 	}
-	
+	v2i get_glypht_size() const
+	{
+		return v2i(int(glypth_bounds_.width), int(glypth_bounds_.height));
+	}
 	/*
     void set_fore(sf::Vector2i pos, sf::Color foreground)
     {
