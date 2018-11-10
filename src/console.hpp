@@ -166,11 +166,15 @@ public:
 	*/
     void clear()
     {
-        tiles_.data.assign(tiles_.data.size(), ' ');
+        //tiles_.data.assign(tiles_.data.size(), ' ');
+		for (auto& t : tiles_.data)
+			t = ' ';
     }
 	void clear_transperent()
 	{
-		tiles_.data.assign(tiles_.data.size(), 0);
+		//tiles_.data.assign(tiles_.data.size(), 0);
+		for (auto& t : tiles_.data)
+			t = 0;
 	}
 	void render();
 };

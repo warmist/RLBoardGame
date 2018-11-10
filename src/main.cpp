@@ -3,6 +3,7 @@
 #include "console.hpp"
 
 #include "map.hpp"
+#include <unordered_set>
 #include <functional>
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
@@ -11,6 +12,8 @@
 
 #include <array>
 
+using std::string;
+
 const int map_w = 200;
 const int map_h = 200;
 const int view_w = 100;
@@ -18,6 +21,67 @@ const int view_h = 100;
 
 std::uniform_int_distribution<int> r_color(0, 255);
 std::mt19937_64 global_rand; //used for non important things
+struct state
+{
+	string name;
+	string default_next;
+};
+/*
+	default states:
+		start->round_start->
+			for each force
+				turn start->
+				turn end->
+			round_end->round_start
+
+	special, no normal way to go there:
+		win
+		lose
+*/
+struct state_map
+{
+	std::unordered_map<string, state> data;
+
+	void add_state(const state& s)
+	{
+		data[s.name] = s;
+	}
+	void init_default_states()
+	{
+		add_state(state{ "game_start","round_start" });
+		add_state(state{ "round_start","round_end" });
+		add_state(state{ "round_end","round_start" });
+		add_state(state{ "win","" });
+		add_state(state{ "lose","" });
+	}
+	state next_state(const state& cur_state)
+	{
+		auto n = cur_state.default_next;
+		if (data.count(n))
+		{
+			return data[n];
+		}
+		else
+		{
+			//TODO: other way to handle this?
+			return data["lose"];
+		}
+	}
+	void insert_state(const state& new_state, const string& after)
+	{
+		if (data.count(after) == 0)
+		{
+			//TODO: how to handle this?
+			return;
+		}
+		
+		auto nn = data[after].default_next;
+		data[after].default_next = new_state.name;
+		state tmp_state = new_state;
+		tmp_state.default_next = nn;
+		add_state(tmp_state);
+	}
+};
 
 void draw_asciimap(console& con)
 {
@@ -44,6 +108,40 @@ void save_map(map& m)
 	m.save(f);
 	fclose(f);
 }
+void dbg_init_world(map& m)
+{
+	tile_attr wall = { v3f(0,0,0),v3f(1,1,1),'#',tile_flags::block_move | tile_flags::block_sight };
+	tile_attr floor = { v3f(0,0,0),v3f(0.2f,0.2f,0.2f),'+',tile_flags::none };
+
+	const int r = map_w / 5;
+	int mw = map_w / 2;
+	int mh = map_h / 2;
+	for (int x = 0; x < r; x++)
+	{
+		for (int y = 0; y < r; y++)
+		{
+			int len = x*x + y*y;
+			if (len > r*r)
+				continue;
+
+			if(len>=(r-2)*(r-1))
+			{
+				m.static_layer(mw + x, mh + y) = wall;
+				m.static_layer(mw - x, mh + y) = wall;
+				m.static_layer(mw + x, mh - y) = wall;
+				m.static_layer(mw - x, mh - y) = wall;
+			}
+			else
+			{
+				m.static_layer(mw + x, mh + y) = floor;
+				m.static_layer(mw - x, mh + y) = floor;
+				m.static_layer(mw + x, mh - y) = floor;
+				m.static_layer(mw - x, mh - y) = floor;
+			}
+		}
+	}
+}
+
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -52,7 +150,13 @@ void game_loop(console& graphics_console, console& text_console)
 	
 	while (window.isOpen())
 	{
+		state_map states;
+		states.init_default_states();
+
+		state current_state = states.data["game_start"];
+
 		auto world = map(map_w, map_h);
+		dbg_init_world(world);
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
 		//set_room(world, center.x-15, center.y-15, 30, 30, 0);
@@ -62,7 +166,6 @@ void game_loop(console& graphics_console, console& text_console)
 		world.furniture.emplace_back(std::move(core));*/
 		//make_worker(world, center.x, center.y);
 		restart = false;
-		bool paused = false;
 		v2i from_click;
 		v2i last_mouse;
 
@@ -88,7 +191,9 @@ void game_loop(console& graphics_console, console& text_console)
 						window.close();
 					// space -> toggle pause
 					if (event.key.code == sf::Keyboard::Space)
-						paused = !paused;
+					{
+						current_state = states.next_state(current_state);
+					}
 					if (event.key.code == sf::Keyboard::S)
 						save_map(world);
 					if (event.key.code == sf::Keyboard::L)
@@ -113,30 +218,21 @@ void game_loop(console& graphics_console, console& text_console)
 				}
 			}
 			//simulate world if that is needed
-			if (!paused || ticks_to_do > 0)
-			{
-				world.tick();
-				if (ticks_to_do > 0)
-					ticks_to_do--;
-			}
-
+			/*
+			world.tick();
+			if (ticks_to_do > 0)
+				ticks_to_do--;
+			*/
 			//drawing part
 			//if (&text_console != &graphics_console)
 			//	text_console.clear_transperent();
-			graphics_console.clear();
+			graphics_console.clear(); //wtf?! not clearing stuff
 
 			//FIXME: @GLITCH when draggin sometimes you see an empty rect? Probably not redrawing empty space?
 			world.render(graphics_console, map_window_start_x, map_window_start_y, view_w, view_h, -map_window_start_x, -map_window_start_y);
 			//gui
 
-			if (paused)
-			{
-				text_console.set_text_centered(v2i(view_w / 2, view_h - 1), "Stepping", v3f(0.4f, 0.5f, 0.5f));
-			}
-			else
-			{
-				text_console.set_text_centered(v2i(view_w / 2, view_h - 1), "Running", v3f(0.4f, 0.5f, 0.5f));
-			}
+			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 
 			graphics_console.render();
 			//if(&text_console!=&graphics_console)
