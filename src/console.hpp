@@ -65,43 +65,25 @@ public:
 			return parent_->get_window();
 		return window_;
 	}
+	bool is_valid_pos(v2i pos)
+	{
+		return pos.x >= 0 && pos.y >= 0 && pos.x < w_ && pos.y < h_;
+	}
 	void set_fore(v2i pos, v3f foreground)
 	{
+		if (!is_valid_pos(pos))
+			return;
 		foreground *= 255;
 		fore_(pos.x, pos.y) = sf::Color(sf::Uint8(foreground.x), sf::Uint8(foreground.y), sf::Uint8(foreground.z));
 	}
 	void set_back(v2i pos, v3f background)
 	{
+		if (!is_valid_pos(pos))
+			return;
 		background *= 255;
 		back_(pos.x, pos.y) = sf::Color(sf::Uint8(background.x), sf::Uint8(background.y), sf::Uint8(background.z));
 	}
 	void set_char(v2i pos, int chr, v3f foreground = v3f(1,1,1), v3f background = v3f(0, 0, 0))
-	{
-		foreground *= 255;
-		background *= 255;
-		tiles_(pos.x, pos.y) = chr;
-		fore_(pos.x, pos.y) = sf::Color(sf::Uint8(foreground.x), sf::Uint8(foreground.y), sf::Uint8(foreground.z));
-		back_(pos.x, pos.y) = sf::Color(sf::Uint8(background.x), sf::Uint8(background.y), sf::Uint8(background.z));
-	}
-	bool is_valid_pos(v2i pos)
-	{
-		return pos.x >= 0 && pos.y >= 0 && pos.x < w_ && pos.y < h_;
-	}
-	void set_fore_safe(v2i pos, v3f foreground)
-	{
-		if (!is_valid_pos(pos))
-			return;
-		foreground *= 255;
-		fore_(pos.x, pos.y) = sf::Color(sf::Uint8(foreground.x), sf::Uint8(foreground.y), sf::Uint8(foreground.z));
-	}
-	void set_back_safe(v2i pos, v3f background)
-	{
-		if (!is_valid_pos(pos))
-			return;
-		background *= 255;
-		back_(pos.x, pos.y) = sf::Color(sf::Uint8(background.x), sf::Uint8(background.y), sf::Uint8(background.z));
-	}
-	void set_char_safe(v2i pos, int chr, v3f foreground = v3f(1, 1, 1), v3f background = v3f(0, 0, 0))
 	{
 		if (!is_valid_pos(pos))
 			return;
