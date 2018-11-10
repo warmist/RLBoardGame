@@ -215,38 +215,65 @@ struct card_hand
 {
 	std::vector<card> cards;
 	int selected_card=3;
-	
-	void render(console& c, int y)
+	v2i get_card_extents(int y,int card_no)
 	{
-		//two ways to lay the cards out:
-		//if enough space dont overlap them and just put side by side from center
-		//if not enough space, start overlapping them
-		//still somehow need to ensure that there is not more than view_w cards as then you could not select a card :|
-		auto draw_cards = [&](int card_w,int skip_w) {
-			for (int i = int(cards.size()) - 1; i >= 0; i--)
-			{
-				if(i==selected_card)
-				{
-					//skip this card as we are going to draw it last
-				}
-				else
-					cards[i].render(c, card_w*i + skip_w, y);
-			}
-			if (selected_card >= 0 && selected_card < cards.size())
-			{
-				cards[selected_card].render(c, card_w*selected_card + skip_w, view_h - card::card_h);
-			}
-		};
 		bool is_crouded = cards.size()*card::card_w >= view_w;
 		if (is_crouded)
 		{
-			int card_size = view_w / int(cards.size());
-			draw_cards(card_size, 0);
+			int card_size = (view_w) / int(cards.size()+1);
+			return v2i(card_size*card_no, y);
 		}
 		else
 		{
 			int skip_space = (view_w - int(cards.size())*card::card_w) / 2;
-			draw_cards(card::card_w, skip_space);
+			return v2i(card::card_w*card_no + skip_space, y);
+		}
+	}
+	void render(console& c, int y)
+	{
+		if (cards.size() == 0)
+			return;
+		//selection logic:
+		//if we have selected card, deselect it if we go out of bounds
+		auto m = get_mouse(c);
+		if (selected_card >= 0)
+		{
+			auto p=get_card_extents(view_h - card::card_h, selected_card);//selected card is higher
+			if (m.x < p.x || m.y < p.y || m.x >= p.x + card::card_w || m.y >= p.y + card::card_h)
+				selected_card = -1;
+		}
+		//then if we are over another card, select it
+		if (selected_card == -1)
+		{
+			for (int i = 0; i < cards.size(); i++)
+			{
+				auto p = get_card_extents(y, i);
+				if (m.x >= p.x && m.y >= p.y && m.x < p.x + card::card_w && m.y < p.y + card::card_h)
+				{
+					selected_card = i;
+					break;
+				}
+			}
+		}
+		
+		//two ways to lay the cards out:
+		//if enough space dont overlap them and just put side by side from center
+		//if not enough space, start overlapping them
+		//still somehow need to ensure that there is not more than view_w cards as then you could not select a card :|
+		for (int i = int(cards.size()) - 1; i >= 0; i--)
+		{
+			auto p = get_card_extents(y, i);
+			if (i == selected_card)
+			{
+				//skip this card as we are going to draw it last
+			}
+			else
+				cards[i].render(c, p.x, p.y);
+		}
+		if (selected_card >= 0 && selected_card < cards.size())
+		{
+			auto p = get_card_extents(y, selected_card);
+			cards[selected_card].render(c, p.x, view_h - card::card_h);
 		}
 	}
 };
