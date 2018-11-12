@@ -168,6 +168,28 @@ enum class card_type
 	generated,
 	attack,
 };
+enum class card_needs
+{
+	nothing,
+	target_unit,
+	empty_square,
+	//more?
+};
+enum class card_fate
+{
+	destroy, //as in - no longer in game
+	discard, //put in the discard pile
+	hand, //move to hand
+	draw_pile_top, //top of the draw pile
+	draw_pile_rand, //somewhere in the pile
+	draw_pile_bottom,
+	//etc...
+};
+struct card;
+class e_player;
+using card_action = card_fate(*)(card& ,e_player& , map&/* needs?? */);
+
+
 constexpr float phi = 1.61803398874989484820f;
 struct card
 {
@@ -175,7 +197,12 @@ struct card
 	std::string desc;
 	static const int card_w = 15;
 	static const int card_h= int(card_w*phi);
+	
 	card_type type=card_type::action;
+	//what to ask when using the card
+	card_needs needs=card_needs::nothing;
+	//what to do when card is used
+	card_action use_callback = nullptr;
 
 	void render(console& c,int x, int y)
 	{
