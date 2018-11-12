@@ -162,6 +162,12 @@ void dbg_init_world(map& m)
 		}
 	}
 }
+enum class card_type
+{
+	action,
+	generated,
+	attack,
+};
 constexpr float phi = 1.61803398874989484820f;
 struct card
 {
@@ -169,9 +175,18 @@ struct card
 	std::string desc;
 	static const int card_w = 15;
 	static const int card_h= int(card_w*phi);
+	card_type type=card_type::action;
+
 	void render(console& c,int x, int y)
 	{
-		
+		v3f border_color;
+		if (type == card_type::generated)
+			border_color = { 0.08f, 0.04f, 0.37f };
+		else if (type == card_type::action)
+			border_color = { 0.57f, 0.44f, 0.07f };
+		else if (type == card_type::attack)
+			border_color = { 0.76f, 0.04f, 0.01f };
+
 		/*
 		const int h = 20;
 		const int w = int(h*phi);
@@ -189,23 +204,23 @@ struct card
 
 		for (int i = 0; i < w; i++)
 		{
-			c.set_char(v2i(x + i, y), tile_hline_double);
-			c.set_char(v2i(x + i, y + h - 1), tile_hline_double);
+			c.set_char(v2i(x + i, y), tile_hline_double, border_color);
+			c.set_char(v2i(x + i, y + h - 1), tile_hline_double, border_color);
 		}
 		for (int i = 0; i < h; i++)
 		{
-			c.set_char(v2i(x, y + i), tile_vline_double);
-			c.set_char(v2i(x + w - 1, y + i), tile_vline_double);
+			c.set_char(v2i(x, y + i), tile_vline_double, border_color);
+			c.set_char(v2i(x + w - 1, y + i), tile_vline_double, border_color);
 		}
-		c.set_char(v2i(x, y), tile_es_corner_double);
-		c.set_char(v2i(x + w - 1, y), tile_ws_corner_double);
-		c.set_char(v2i(x, y + h - 1), tile_ne_corner_double);
-		c.set_char(v2i(x + w - 1, y + h - 1), tile_wn_corner_double);
+		c.set_char(v2i(x, y), tile_es_corner_double, border_color);
+		c.set_char(v2i(x + w - 1, y), tile_ws_corner_double, border_color);
+		c.set_char(v2i(x, y + h - 1), tile_ne_corner_double, border_color);
+		c.set_char(v2i(x + w - 1, y + h - 1), tile_wn_corner_double, border_color);
 
 		const int text_start = int(w / 2 - name.length() / 2);
 		c.set_text(v2i(x + text_start, y), name);
-		c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double);
-		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double);
+		c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color);
+		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
 
 		const int desc_start_y = y + 1;
 		c.set_text(v2i(x + 2, desc_start_y), desc);
@@ -306,6 +321,7 @@ card default_move_action()
 	card ret;
 	ret.name = "Run";
 	ret.desc = "Cost      \xad\n\nMove\nRange      3\n\n\n\nRun to\nthe target";
+	ret.type = card_type::generated;
 	return ret;
 }
 void game_loop(console& graphics_console, console& text_console)
@@ -325,8 +341,13 @@ void game_loop(console& graphics_console, console& text_console)
 		card t_card;
 		t_card.name = "Strike";
 		t_card.desc = "Cost      \xad\n\nAttack\nRange      0\nDmg      1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
-		for(int i=0;i<5;i++)
+		t_card.type = card_type::attack;
+		for(int i=0;i<3;i++)
 			hand.cards.push_back(t_card);
+		t_card.name = "Push";
+		t_card.desc = "Cost      \xad\n\nAction\nRange      0\nDistance 1D4\n\n\n\nForce a\nmove";
+		t_card.type = card_type::action;
+		hand.cards.push_back(t_card);
 		hand.cards.push_back(default_move_action());
 		auto world = map(map_w, map_h);
 		dbg_init_world(world);
