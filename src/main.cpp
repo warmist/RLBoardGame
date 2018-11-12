@@ -277,12 +277,43 @@ struct card_hand
 		}
 	}
 };
+class e_player :public entity
+{
+public:
+	virtual const char* name() const { return "player_figurine"; }
+	int actions_per_turn= 2;
+	int current_action = 1;
+	int max_hp = 20;
+	int current_hp = 20;
+	void render_gui(console& c, int x, int y)
+	{
+		c.set_text(v2i(x, y),   "Health: ");
+		c.set_text(v2i(x, y+1), "Actions:");
+
+		c.set_text(v2i(x + 10, y), std::to_string(current_hp) + "/" + std::to_string(max_hp));
+
+		int dx = 0;
+		for (int i = 0; i < actions_per_turn-current_action; i++)
+			c.set_char(v2i(x + 10 + (dx++), y + 1), (unsigned char)'\xad', v3f(0.4f, 0.4f, 0.4f));
+		for (int i = 0; i < current_action; i++)
+			c.set_char(v2i(x + 10 + (dx++), y + 1), (unsigned char)'\xad', v3f(1, 1, 1));
+
+		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
+	}
+};
+card default_move_action()
+{
+	card ret;
+	ret.name = "Run";
+	ret.desc = "Cost      \xad\n\nMove\nRange      3\n\n\n\nRun to\nthe target";
+	return ret;
+}
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
 	bool restart = false;
 	float time = 0;
-	
+	e_player* player = nullptr;
 	while (window.isOpen())
 	{
 		state_map states;
@@ -296,9 +327,21 @@ void game_loop(console& graphics_console, console& text_console)
 		t_card.desc = "Cost      \xad\n\nAttack\nRange      0\nDmg      1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
 		for(int i=0;i<5;i++)
 			hand.cards.push_back(t_card);
-		
+		hand.cards.push_back(default_move_action());
 		auto world = map(map_w, map_h);
 		dbg_init_world(world);
+
+		std::unique_ptr<e_player> ptr_player;
+		ptr_player.reset(new e_player);
+		player = ptr_player.get();
+
+		player->x = map_w / 2;
+		player->y = map_h / 2;
+		player->glyph = '@';
+		player->color_fore = v3f(1, 1, 1);
+
+		world.entities.emplace_back(std::move(ptr_player));
+
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
 		//set_room(world, center.x-15, center.y-15, 30, 30, 0);
@@ -346,6 +389,7 @@ void game_loop(console& graphics_console, console& text_console)
 					if (event.key.code == sf::Keyboard::A)
 					{
 						hand.cards.push_back(t_card);
+						player->current_action--;
 					}
 				}
 				if (event.type == sf::Event::MouseMoved)
@@ -371,11 +415,11 @@ void game_loop(console& graphics_console, console& text_console)
 			//drawing part
 			//if (&text_console != &graphics_console)
 			//	text_console.clear_transperent();
-			graphics_console.clear(); //FIXME://wtf?! not clearing stuff
+			graphics_console.clear();
 
 			world.render(graphics_console, map_window_start_x, map_window_start_y, view_w, view_h, -map_window_start_x, -map_window_start_y);
 			//gui
-			
+			player->render_gui(graphics_console, 0, 0);
 			hand.render(graphics_console, view_h - 8);
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);
