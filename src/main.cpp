@@ -162,6 +162,11 @@ void dbg_init_world(map& m)
 		}
 	}
 }
+enum class gui_state
+{
+	normal,
+	selecting_target,
+};
 enum class card_type
 {
 	action,
@@ -185,9 +190,13 @@ enum class card_fate
 	draw_pile_bottom,
 	//etc...
 };
+struct card_needs_data
+{
+	int x, y;
+};
 struct card;
 class e_player;
-using card_action = card_fate(*)(card& ,e_player& , map&/* needs?? */);
+using card_action = card_fate(*)(card& ,e_player& , map&, card_needs_data* );
 
 
 constexpr float phi = 1.61803398874989484820f;
@@ -256,7 +265,8 @@ struct card
 struct card_hand
 {
 	std::vector<card> cards;
-	int selected_card=3;
+	int selected_card=-1;
+	int hand_gui_y;
 	v2i get_card_extents(int y,int card_no)
 	{
 		bool is_crouded = cards.size()*card::card_w >= view_w;
@@ -271,7 +281,7 @@ struct card_hand
 			return v2i(card::card_w*card_no + skip_space, y);
 		}
 	}
-	void render(console& c, int y)
+	void input(console& c)
 	{
 		if (cards.size() == 0)
 			return;
@@ -280,7 +290,7 @@ struct card_hand
 		auto m = get_mouse(c);
 		if (selected_card >= 0)
 		{
-			auto p=get_card_extents(view_h - card::card_h, selected_card);//selected card is higher
+			auto p = get_card_extents(view_h - card::card_h, selected_card);//selected card is higher
 			if (m.x < p.x || m.y < p.y || m.x >= p.x + card::card_w || m.y >= p.y + card::card_h)
 				selected_card = -1;
 		}
@@ -289,7 +299,7 @@ struct card_hand
 		{
 			for (int i = 0; i < cards.size(); i++)
 			{
-				auto p = get_card_extents(y, i);
+				auto p = get_card_extents(hand_gui_y, i);
 				if (m.x >= p.x && m.y >= p.y && m.x < p.x + card::card_w && m.y < p.y + card::card_h)
 				{
 					selected_card = i;
@@ -297,14 +307,16 @@ struct card_hand
 				}
 			}
 		}
-		
+	}
+	void render(console& c)
+	{
 		//two ways to lay the cards out:
 		//if enough space dont overlap them and just put side by side from center
 		//if not enough space, start overlapping them
 		//still somehow need to ensure that there is not more than view_w cards as then you could not select a card :|
 		for (int i = int(cards.size()) - 1; i >= 0; i--)
 		{
-			auto p = get_card_extents(y, i);
+			auto p = get_card_extents(hand_gui_y, i);
 			if (i == selected_card)
 			{
 				//skip this card as we are going to draw it last
@@ -314,7 +326,7 @@ struct card_hand
 		}
 		if (selected_card >= 0 && selected_card < cards.size())
 		{
-			auto p = get_card_extents(y, selected_card);
+			auto p = get_card_extents(hand_gui_y, selected_card);
 			cards[selected_card].render(c, p.x, view_h - card::card_h);
 		}
 	}
@@ -351,6 +363,47 @@ card default_move_action()
 	ret.type = card_type::generated;
 	return ret;
 }
+
+void handle_card_use(bool click,card_hand& hand,map& m,e_player& p)
+{
+	if (click && hand.selected_card != -1)
+	{
+
+		auto& card = hand.cards[hand.selected_card];
+		if (card.use_callback)
+		{
+			auto ret=card.use_callback(card, p,m,nullptr );
+			switch (ret)
+			{
+			case card_fate::destroy:
+				hand.cards.erase(hand.cards.begin() + hand.selected_card);
+				hand.selected_card = -1;
+				break;
+			case card_fate::discard:
+				//todo
+				break;
+			case card_fate::hand:
+				//todo
+				break;
+			case card_fate::draw_pile_top:
+				//todo
+				break;
+			case card_fate::draw_pile_rand:
+				//todo
+				break;
+			case card_fate::draw_pile_bottom:
+				//todo
+				break;
+			default:
+				break;
+			}
+		}
+	}
+}
+card_fate strike_action(card&, e_player&, map&, card_needs_data*)
+{
+	return card_fate::destroy;
+}
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -365,10 +418,12 @@ void game_loop(console& graphics_console, console& text_console)
 		state current_state = states.data["game_start"];
 
 		card_hand hand;
+		hand.hand_gui_y = view_h - 8;
 		card t_card;
 		t_card.name = "Strike";
 		t_card.desc = "Cost      \xad\n\nAttack\nRange      0\nDmg      1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
 		t_card.type = card_type::attack;
+		t_card.use_callback = strike_action;
 		for(int i=0;i<3;i++)
 			hand.cards.push_back(t_card);
 		t_card.name = "Push";
@@ -405,11 +460,14 @@ void game_loop(console& graphics_console, console& text_console)
 		int ticks_to_do = 0;
 		int map_window_start_x = view_w/2;// player->x - view_w / 2;
 		int map_window_start_y = view_h/2;// player->y - view_h / 2;
+		bool mouse_down;
+		gui_state gui_state=gui_state::normal;
+
 		while (!restart && window.isOpen())
 		{
 			// Process events
 			sf::Event event;
-
+			mouse_down = false;
 			while (window.pollEvent(event))
 			{
 				//NOTE: changes here need update in docs!
@@ -447,7 +505,17 @@ void game_loop(console& graphics_console, console& text_console)
 					}
 					last_mouse = cur_mouse;
 				}
+				if (event.type == sf::Event::MouseButtonPressed)
+				{
+					if(event.mouseButton.button== sf::Mouse::Left)
+					{
+						mouse_down = true;
+					}
+					
+				}
 			}
+			hand.input(graphics_console);
+			handle_card_use(mouse_down,hand,world,*player);
 			//simulate world if that is needed
 			/*
 			world.tick();
@@ -462,7 +530,7 @@ void game_loop(console& graphics_console, console& text_console)
 			world.render(graphics_console, map_window_start_x, map_window_start_y, view_w, view_h, -map_window_start_x, -map_window_start_y);
 			//gui
 			player->render_gui(graphics_console, 0, 0);
-			hand.render(graphics_console, view_h - 8);
+			hand.render(graphics_console);
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);
 			graphics_console.render();
@@ -482,7 +550,7 @@ int main(int argc,char **argv)
 	console& graphics_console = text_console;
 	//console graphics_console(&text_console,view_w * 2, view_h * 2, font_descriptor(Zaratustra_custom_5x5, array_size(Zaratustra_custom_5x5), 5, 5));
 
-		game_loop(graphics_console,text_console);
+	game_loop(graphics_console,text_console);
   
     return EXIT_SUCCESS;
 }
