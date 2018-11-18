@@ -422,7 +422,7 @@ void game_loop(console& graphics_console, console& text_console)
 					// Escape key: exit
 					if (event.key.code == sf::Keyboard::Escape)
 						window.close();
-					// space -> toggle pause
+
 					if (event.key.code == sf::Keyboard::Space)
 					{
 						current_state = states.next_state(current_state);
@@ -431,18 +431,12 @@ void game_loop(console& graphics_console, console& text_console)
 						save_map(world);
 					if (event.key.code == sf::Keyboard::L)
 						load_map(world);
-					// shift+r -> reset
-					if (event.key.shift && (event.key.code == sf::Keyboard::R))
-						restart = true;
-					if (event.key.code == sf::Keyboard::A)
-					{
-						hand.cards.push_back(t_card);
-						player->current_action--;
-					}
+
 				}
 				if (event.type == sf::Event::MouseMoved)
 				{
-					auto cur_mouse = v2i(int(round(event.mouseMove.x / 12)), int(round(event.mouseMove.y / 12))); //FIXME: @hardcoded font size
+					auto tile_size = graphics_console.get_glypht_size();
+					auto cur_mouse = v2i(int(round(event.mouseMove.x / tile_size.x)), int(round(event.mouseMove.y / tile_size.y)));
 					if (cur_mouse.x < 0)cur_mouse.x = 0;
 					if (cur_mouse.y < 0)cur_mouse.y = 0;
 					if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle))
