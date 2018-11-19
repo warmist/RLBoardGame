@@ -166,6 +166,7 @@ enum class gui_state
 {
 	normal,
 	selecting_target,
+	exiting,
 };
 enum class card_type
 {
@@ -361,15 +362,21 @@ card default_move_action()
 	ret.name = "Run";
 	ret.desc = "Cost      \xad\n\nMove\nRange      3\n\n\n\nRun to\nthe target";
 	ret.type = card_type::generated;
+	ret.needs = card_needs::empty_square;
 	return ret;
 }
 
-void handle_card_use(bool click,card_hand& hand,map& m,e_player& p)
+void handle_card_use(bool click,card_hand& hand,map& m,e_player& p,gui_state& current_state)
 {
 	if (click && hand.selected_card != -1)
 	{
 
 		auto& card = hand.cards[hand.selected_card];
+		if (card.needs != card_needs::nothing)
+		{
+			current_state = gui_state::selecting_target;
+			return;
+		}
 		if (card.use_callback)
 		{
 			auto ret=card.use_callback(card, p,m,nullptr );
@@ -479,8 +486,21 @@ void game_loop(console& graphics_console, console& text_console)
 				{
 					// Escape key: exit
 					if (event.key.code == sf::Keyboard::Escape)
-						window.close();
-
+					{
+						if (gui_state == gui_state::exiting)
+							window.close();
+						else if (gui_state == gui_state::normal)
+							gui_state = gui_state::exiting;
+						else
+							gui_state = gui_state::normal;
+					}
+					else
+					{
+						if (gui_state == gui_state::exiting)
+						{
+							gui_state = gui_state::normal;
+						}
+					}
 					if (event.key.code == sf::Keyboard::Space)
 					{
 						current_state = states.next_state(current_state);
@@ -514,23 +534,33 @@ void game_loop(console& graphics_console, console& text_console)
 					
 				}
 			}
-			hand.input(graphics_console);
-			handle_card_use(mouse_down,hand,world,*player);
-			//simulate world if that is needed
-			/*
-			world.tick();
-			if (ticks_to_do > 0)
-				ticks_to_do--;
-			*/
-			//drawing part
-			//if (&text_console != &graphics_console)
-			//	text_console.clear_transperent();
-			graphics_console.clear();
 
+			graphics_console.clear();
 			world.render(graphics_console, map_window_start_x, map_window_start_y, view_w, view_h, -map_window_start_x, -map_window_start_y);
-			//gui
 			player->render_gui(graphics_console, 0, 0);
-			hand.render(graphics_console);
+
+			if(gui_state==gui_state::normal)
+			{
+				hand.input(graphics_console);
+				handle_card_use(mouse_down,hand,world,*player,gui_state);
+				hand.render(graphics_console);
+			}
+			else if (gui_state == gui_state::exiting)
+			{
+				int exit_h = view_h / 2;
+				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?");
+				graphics_console.set_text_centered(v2i(view_w / 2, exit_h+1), "(press esc to confirm, anything else - cancel)");
+			}
+			else if (gui_state == gui_state::selecting_target)
+			{
+				auto id = hand.selected_card;
+				if (id != -1 && id < hand.cards.size())
+				{
+					auto& card = hand.cards[id];
+					card.render(graphics_console, view_w/2 - card::card_w / 2, view_h - card::card_h);
+				}
+			}
+			
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);
 			graphics_console.render();
