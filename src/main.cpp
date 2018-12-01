@@ -161,6 +161,8 @@ void dbg_init_world(map& m)
 			}
 		}
 	}
+	for(int i=-1;i<=1;i++)
+		m.static_layer(mw + 1, mh + i) = wall;
 }
 enum class gui_state
 {
@@ -365,10 +367,10 @@ card default_move_action()
 {
 	card ret;
 	ret.name = "Run";
-	ret.desc = "Cost      \xad\n\nMove\nRange      3\n\n\n\nRun to\nthe target";
+	ret.desc = "Cost      \xad\n\nMove\nRange      5\n\n\n\nRun to\nthe target";
 	ret.type = card_type::generated;
 	ret.needs = card_needs::empty_square;
-	ret.needs_data = { 0,0,3 };
+	ret.needs_data = { 0,0,5 };
 	return ret;
 }
 
@@ -578,7 +580,7 @@ void game_loop(console& graphics_console, console& text_console)
 			else if (gui_state == gui_state::selecting_target)
 			{
 				//render range highlight
-				//highlight(graphics_console,player->x- map_window_start_x, player->y- map_window_start_y, cur_needs.distance,v3f(0.1f,0.2f,0.5f));
+				highlight(graphics_console,player->x- map_view_pos.x, player->y- map_view_pos.y, cur_needs.distance,v3f(0.1f,0.2f,0.5f));
 				//render mouse/path to target
 				//render selected card
 				auto id = hand.selected_card;

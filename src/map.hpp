@@ -71,8 +71,6 @@ struct entity:public tile_attr
 		return other.type == type;
 	}
 };
-struct furniture;
-typedef std::unique_ptr<furniture> furniture_ptr;
 
 typedef std::unique_ptr<entity> entity_ptr;
 
