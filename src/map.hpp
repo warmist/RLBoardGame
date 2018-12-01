@@ -89,7 +89,7 @@ struct map
 
 	void tick();
     
-    void render(console& trg,int start_x,int start_y,int draw_w,int draw_h,int window_off_x,int window_off_y);
+    void render(console& trg, const recti& view_rect, const v2i& view_pos);
     std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
 
     //helper functions

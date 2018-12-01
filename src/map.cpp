@@ -7,35 +7,26 @@ map::map(int w, int h) :static_layer(w,h)
 {
 }
 
-void map::render(console& trg, int start_x, int start_y, int draw_w, int draw_h, int window_off_x, int window_off_y)
+void map::render(console& trg, const recti& view_rect,const v2i& view_pos)
 {
-    int end_x = std::min(static_layer.w, start_x + draw_w);//in map clamp
-    int end_y = std::min(static_layer.h, start_y + draw_h);
-    start_x = std::max(0, start_x);
-    start_y = std::max(0, start_y);
-    for (int x = start_x; x <end_x; x++)
-        for (int y = start_y; y < end_y; y++)
+	v2i view_size = view_rect.size;
+    for (int x = view_rect.x(); x <view_size.x; x++)
+        for (int y = view_rect.y(); y <view_size.y; y++)
         {
-            const auto& t = static_layer(x, y);
-            int tx = x + window_off_x;
-            int ty = y + window_off_y;
-            if (tx < 0 || ty < 0 || tx >= trg.w_ || ty >= trg.h_) //inscreen check
-            {
-                continue;
-            }
-            trg.set_char(v2i(tx, ty), t.glyph, t.color_fore,t.color_back);
+			v2i tpos=v2i(x, y)+view_pos;
+			if (tpos.x >= static_layer.w || tpos.x < 0 ||
+				tpos.y >= static_layer.h || tpos.y < 0)
+				continue;
+            const auto& t = static_layer(tpos);
+            trg.set_char(v2i(x,y), t.glyph, t.color_fore,t.color_back);
         }
 
-
-
+	
     for (const auto& e : entities)
     {
         if(!e || e->removed) continue;
-        int ex = e->x + window_off_x;
-        int ey = e->y + window_off_y;
-        if (ex < 0 || ey < 0 || ex >= trg.w_ || ey >= trg.h_)
-            continue;
-        trg.set_char(v2i(ex, ey), e->glyph, e->color_fore,e->color_back);
+		v2i tpos(e->x, e->y);
+        trg.set_char(tpos-view_pos, e->glyph, e->color_fore,e->color_back);
     }
 
 	
