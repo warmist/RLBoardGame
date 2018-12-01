@@ -168,6 +168,7 @@ enum class gui_state
 	selecting_target,
 	exiting,
 };
+
 enum class card_type
 {
 	action,
@@ -191,9 +192,12 @@ enum class card_fate
 	draw_pile_bottom,
 	//etc...
 };
-struct card_needs_data
+struct card_needs_data //TODO: duplication/mutable state in card? need better/nicer way to store input/output stuff
 {
+	//output
 	int x, y;
+	//input
+	float distance;
 };
 struct card;
 class e_player;
@@ -211,6 +215,7 @@ struct card
 	card_type type=card_type::action;
 	//what to ask when using the card
 	card_needs needs=card_needs::nothing;
+	card_needs_data needs_data; //TODO: UGH...
 	//what to do when card is used
 	card_action use_callback = nullptr;
 
@@ -363,10 +368,11 @@ card default_move_action()
 	ret.desc = "Cost      \xad\n\nMove\nRange      3\n\n\n\nRun to\nthe target";
 	ret.type = card_type::generated;
 	ret.needs = card_needs::empty_square;
+	ret.needs_data = { 0,0,3 };
 	return ret;
 }
 
-void handle_card_use(bool click,card_hand& hand,map& m,e_player& p,gui_state& current_state)
+void handle_card_use(bool click,card_hand& hand,map& m,e_player& p,gui_state& current_state,card_needs_data& cur_needs)
 {
 	if (click && hand.selected_card != -1)
 	{
@@ -375,6 +381,7 @@ void handle_card_use(bool click,card_hand& hand,map& m,e_player& p,gui_state& cu
 		if (card.needs != card_needs::nothing)
 		{
 			current_state = gui_state::selecting_target;
+			cur_needs = card.needs_data;
 			return;
 		}
 		if (card.use_callback)
@@ -410,6 +417,21 @@ void handle_card_use(bool click,card_hand& hand,map& m,e_player& p,gui_state& cu
 card_fate strike_action(card&, e_player&, map&, card_needs_data*)
 {
 	return card_fate::destroy;
+}
+void highlight(console& c,int x,int y, float range,v3f color)
+{
+	int ir = int(range);
+	for (int dx =-ir ; dx <= ir; dx += 1)
+	{
+		for (int dy = -ir; dy <= ir; dy += 1)
+		{
+			float r = float(dx*dx + dy*dy);
+			if (r <= range*range)
+			{
+				c.set_back(v2i(x + dx, y + dy), color);
+			}
+		}
+	}
 }
 void game_loop(console& graphics_console, console& text_console)
 {
@@ -465,10 +487,13 @@ void game_loop(console& graphics_console, console& text_console)
 		v2i last_mouse;
 
 		int ticks_to_do = 0;
-		int map_window_start_x = view_w/2;// player->x - view_w / 2;
-		int map_window_start_y = view_h/2;// player->y - view_h / 2;
+
+		recti map_window = { 0,0,view_w,view_h };
+		v2i map_view_pos = { view_w / 2,view_h / 2 };
+
 		bool mouse_down;
 		gui_state gui_state=gui_state::normal;
+		card_needs_data cur_needs = { 0 };
 
 		while (!restart && window.isOpen())
 		{
@@ -520,8 +545,7 @@ void game_loop(console& graphics_console, console& text_console)
 					if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle))
 					{
 						auto delta = cur_mouse - last_mouse;
-						map_window_start_x -= delta.x;
-						map_window_start_y -= delta.y;
+						map_view_pos -= delta;
 					}
 					last_mouse = cur_mouse;
 				}
@@ -536,23 +560,27 @@ void game_loop(console& graphics_console, console& text_console)
 			}
 
 			graphics_console.clear();
-			world.render(graphics_console, map_window_start_x, map_window_start_y, view_w, view_h, -map_window_start_x, -map_window_start_y);
+			world.render(graphics_console,map_window, map_view_pos);
 			player->render_gui(graphics_console, 0, 0);
 
 			if(gui_state==gui_state::normal)
 			{
 				hand.input(graphics_console);
-				handle_card_use(mouse_down,hand,world,*player,gui_state);
+				handle_card_use(mouse_down,hand,world,*player,gui_state, cur_needs);
 				hand.render(graphics_console);
 			}
 			else if (gui_state == gui_state::exiting)
 			{
 				int exit_h = view_h / 2;
-				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?");
+				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?",v3f(0.6f,0,0));
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h+1), "(press esc to confirm, anything else - cancel)");
 			}
 			else if (gui_state == gui_state::selecting_target)
 			{
+				//render range highlight
+				//highlight(graphics_console,player->x- map_window_start_x, player->y- map_window_start_y, cur_needs.distance,v3f(0.1f,0.2f,0.5f));
+				//render mouse/path to target
+				//render selected card
 				auto id = hand.selected_card;
 				if (id != -1 && id < hand.cards.size())
 				{
