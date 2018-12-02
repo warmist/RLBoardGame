@@ -257,12 +257,12 @@ struct dyn_array2d
         resize(w, h);
     }
     
-    void resize(int nw, int nh)
+    void resize(int nw, int nh,const T& v=T())
     {
         w = nw; h = nh;
         data.resize(w*h);
     }
-	void resize(v2i size)
+	void resize(v2i size, const T& v = T())
 	{
 		resize(size.x, size.y);
 	}

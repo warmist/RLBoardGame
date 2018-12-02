@@ -68,6 +68,88 @@ std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
     return pathfinding(static_layer, f, x, y, tx, ty);
 }
 
+void map::pathfind_field(v2i target,float range)
+{
+	auto& pfr = pathfinding_field_result;
+	pfr.data.clear();
+	pfr.resize(static_layer.w, static_layer.h,v2i(0,0));
+
+	int blocked = std::numeric_limits<int>::max();//blocked but processed
+	pfr(target) = { 0,0 };
+
+	std::queue<v3i> processing_front;
+	int irange = int(range);
+	for (int i = 0; i < 4; i++)
+	{
+		int dx = con4_dx[i];
+		int dy = con4_dy[i];
+		v2i t = target + v2i(dx, dy);
+		if (is_valid_coord(t))
+		{
+			if (is_passible(t.x, t.y))
+			{
+				pfr(t) = v2i(-dx, -dy);
+				processing_front.push(v3i(t.x,t.y, 1));
+			}
+			else
+			{
+				pfr(t) = v2i(blocked, blocked);
+			}
+		}
+	}
+
+	while (!processing_front.empty())
+	{
+		v3i c = processing_front.front();
+		processing_front.pop();
+
+		for (int i = 0; i < 4; i++)
+		{
+			int dx = con4_dx[i];
+			int dy = con4_dy[i];
+			v2i t = v2i(int(c.x + dx), int(c.y + dy));
+			int dist = c.z + 1;
+			
+			if (is_valid_coord(t))
+			{
+				if (pfr(t) != v2i(0, 0) || t == target) //using 0,0 as unprocessed, also the target coord is 0,0
+				{
+					continue;
+				}
+				if (is_passible(t.x, t.y))
+				{
+					pfr(t) = v2i(-dx, -dy);
+					if (dist >= range)
+						continue;
+					processing_front.push(v3i(t.x, t.y, dist));
+				}
+				else
+				{
+					pfr(t) = v2i(blocked, blocked);
+				}
+			}
+		}
+	}
+}
+
+void map::render_reachable(console & trg, const recti & view_rect, const v2i & view_pos,const v3f& color)
+{
+	int blocked = std::numeric_limits<int>::max();//blocked but processed
+
+	v2i view_size = view_rect.size;
+	for (int x = view_rect.x(); x <view_size.x; x++)
+		for (int y = view_rect.y(); y <view_size.y; y++)
+		{
+			v2i tpos = v2i(x, y) + view_pos;
+			if (tpos.x >= pathfinding_field_result.w || tpos.x < 0 ||
+				tpos.y >= pathfinding_field_result.h || tpos.y < 0)
+				continue;
+			const auto& t = pathfinding_field_result(tpos);
+			if((t.x!=0 || t.y!=0) && (t.x!= blocked ))
+				trg.set_back(v2i(x, y), color);
+		}
+}
+
 void map::tick()
 {
 	for(auto& e: entities)

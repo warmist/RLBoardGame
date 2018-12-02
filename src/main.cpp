@@ -161,7 +161,7 @@ void dbg_init_world(map& m)
 			}
 		}
 	}
-	for(int i=-1;i<=1;i++)
+	for(int i=-3;i<=3;i++)
 		m.static_layer(mw + 1, mh + i) = wall;
 }
 enum class gui_state
@@ -420,20 +420,10 @@ card_fate strike_action(card&, e_player&, map&, card_needs_data*)
 {
 	return card_fate::destroy;
 }
-void highlight(console& c,int x,int y, float range,v3f color)
+void highlight(map& m,int x,int y, float range, console& c, const recti& view_rect, const v2i& view_pos,v3f color)
 {
-	int ir = int(range);
-	for (int dx =-ir ; dx <= ir; dx += 1)
-	{
-		for (int dy = -ir; dy <= ir; dy += 1)
-		{
-			float r = float(dx*dx + dy*dy);
-			if (r <= range*range)
-			{
-				c.set_back(v2i(x + dx, y + dy), color);
-			}
-		}
-	}
+	m.pathfind_field(v2i(x, y), range);
+	m.render_reachable(c, view_rect, view_pos, color);
 }
 void game_loop(console& graphics_console, console& text_console)
 {
@@ -580,7 +570,7 @@ void game_loop(console& graphics_console, console& text_console)
 			else if (gui_state == gui_state::selecting_target)
 			{
 				//render range highlight
-				highlight(graphics_console,player->x- map_view_pos.x, player->y- map_view_pos.y, cur_needs.distance,v3f(0.1f,0.2f,0.5f));
+				highlight(world,player->x, player->y, cur_needs.distance, graphics_console, map_window, map_view_pos,v3f(0.1f,0.2f,0.5f));
 				//render mouse/path to target
 				//render selected card
 				auto id = hand.selected_card;

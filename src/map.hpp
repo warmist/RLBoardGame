@@ -82,6 +82,7 @@ struct map
     std::mt19937_64 rand;
 
     dyn_array2d<tile_attr> static_layer;
+	dyn_array2d<v2i> pathfinding_field_result;
 
     std::vector<entity_ptr> entities;
 
@@ -89,6 +90,8 @@ struct map
     
     void render(console& trg, const recti& view_rect, const v2i& view_pos);
     std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
+	void pathfind_field(v2i target,float range);
+	void render_reachable(console& trg, const recti& view_rect, const v2i& view_pos,const v3f& color);
 
     //helper functions
     inline bool is_valid_coord(int x, int y) const { return x >= 0 && y >= 0 && x < static_layer.w && y < static_layer.h; }
