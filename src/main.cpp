@@ -564,11 +564,11 @@ void game_loop(console& graphics_console, console& text_console)
 			}
 			else if (gui_state == gui_state::selecting_target)
 			{
-				world.pathfind_field(v2i(player->x, player->y), int(cur_needs.distance)); //TODO: do this only once when player position changes, or card has been selected
+				world.pathfind_field(v2i(player->x, player->y), cur_needs.distance); //TODO: do this only once when player position changes, or card has been selected
 				//render range highlight
 				world.render_reachable(graphics_console, map_window, map_view_pos, v3f(0.1f, 0.2f, 0.5f));
 				//render mouse/path to target
-
+				world.render_path(graphics_console,get_mouse(graphics_console), map_window, map_view_pos, v3f(0.3f, 0.7f, 0.2f), v3f(0.8f, 0.2f, 0.4f));
 				//render selected card
 				auto id = hand.selected_card;
 				if (id != -1 && id < hand.cards.size())

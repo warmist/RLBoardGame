@@ -67,14 +67,13 @@ std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
 
     return pathfinding(static_layer, f, x, y, tx, ty);
 }
-
-void map::pathfind_field(v2i target,float range)
+const int path_blocked = std::numeric_limits<int>::max();//blocked but processed
+void map::pathfind_field(v2i target,float range) //TODO: maybe con8 would be fun but FIXME needs work
 {
 	auto& pfr = pathfinding_field_result;
 	pfr.data.clear();
 	pfr.resize(static_layer.w, static_layer.h,v2i(0,0));
 
-	int blocked = std::numeric_limits<int>::max();//blocked but processed
 	pfr(target) = { 0,0 };
 
 	std::queue<v3i> processing_front;
@@ -93,7 +92,7 @@ void map::pathfind_field(v2i target,float range)
 			}
 			else
 			{
-				pfr(t) = v2i(blocked, blocked);
+				pfr(t) = v2i(path_blocked, path_blocked);
 			}
 		}
 	}
@@ -125,7 +124,7 @@ void map::pathfind_field(v2i target,float range)
 				}
 				else
 				{
-					pfr(t) = v2i(blocked, blocked);
+					pfr(t) = v2i(path_blocked, path_blocked);
 				}
 			}
 		}
@@ -134,7 +133,6 @@ void map::pathfind_field(v2i target,float range)
 
 void map::render_reachable(console & trg, const recti & view_rect, const v2i & view_pos,const v3f& color)
 {
-	int blocked = std::numeric_limits<int>::max();//blocked but processed
 
 	v2i view_size = view_rect.size;
 	for (int x = view_rect.x(); x <view_size.x; x++)
@@ -145,9 +143,45 @@ void map::render_reachable(console & trg, const recti & view_rect, const v2i & v
 				tpos.y >= pathfinding_field_result.h || tpos.y < 0)
 				continue;
 			const auto& t = pathfinding_field_result(tpos);
-			if((t.x!=0 || t.y!=0) && (t.x!= blocked ))
+			if((t.x!=0 || t.y!=0) && (t.x!= path_blocked))
 				trg.set_back(v2i(x, y), color);
 		}
+}
+
+void map::render_path(console & trg, v2i target, const recti & view_rect, const v2i & view_pos, const v3f & color_ok, const v3f & color_fail)
+{
+	auto& pfr = pathfinding_field_result;
+	v2i map_coord = target + view_pos;
+	
+	if (map_coord.x >= pfr.w || map_coord.x < 0 || map_coord.y >= pfr.h || map_coord.y < 0)
+	{
+		trg.set_back(target, color_fail);
+		return;
+	}
+	v2i cdelta = pfr(map_coord);
+	if ((cdelta.x == 0 && cdelta.y == 0) ||(cdelta.x== path_blocked))
+	{
+		trg.set_back(target, color_fail);
+		return;
+	}
+
+	while (true)
+	{
+		v2i view_coord = map_coord - view_pos;
+		if (view_rect.is_inside(view_coord))
+			trg.set_back(view_coord, color_ok);
+		map_coord +=cdelta;
+		if (map_coord.x >= pfr.w || map_coord.x < 0 || map_coord.y >= pfr.h || map_coord.y < 0)
+		{
+			//TODO: error here?
+			return;
+		}
+		cdelta = pfr(map_coord);
+		if (cdelta.x == 0 && cdelta.y == 0)
+		{
+			return; //done
+		}
+	}
 }
 
 void map::tick()
