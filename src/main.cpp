@@ -420,11 +420,6 @@ card_fate strike_action(card&, e_player&, map&, card_needs_data*)
 {
 	return card_fate::destroy;
 }
-void highlight(map& m,int x,int y, float range, console& c, const recti& view_rect, const v2i& view_pos,v3f color)
-{
-	m.pathfind_field(v2i(x, y), range);
-	m.render_reachable(c, view_rect, view_pos, color);
-}
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -569,9 +564,11 @@ void game_loop(console& graphics_console, console& text_console)
 			}
 			else if (gui_state == gui_state::selecting_target)
 			{
+				world.pathfind_field(v2i(player->x, player->y), int(cur_needs.distance)); //TODO: do this only once when player position changes, or card has been selected
 				//render range highlight
-				highlight(world,player->x, player->y, cur_needs.distance, graphics_console, map_window, map_view_pos,v3f(0.1f,0.2f,0.5f));
+				world.render_reachable(graphics_console, map_window, map_view_pos, v3f(0.1f, 0.2f, 0.5f));
 				//render mouse/path to target
+
 				//render selected card
 				auto id = hand.selected_card;
 				if (id != -1 && id < hand.cards.size())
