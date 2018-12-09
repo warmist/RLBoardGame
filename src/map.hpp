@@ -82,7 +82,7 @@ struct map
     std::mt19937_64 rand;
 
     dyn_array2d<tile_attr> static_layer;
-	dyn_array2d<v2i> pathfinding_field_result;
+	dyn_array2d<float> pathfinding_field_result;
 
     std::vector<entity_ptr> entities;
 

@@ -67,64 +67,66 @@ std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
 
     return pathfinding(static_layer, f, x, y, tx, ty);
 }
-const int path_blocked = std::numeric_limits<int>::max();//blocked but processed
-void map::pathfind_field(v2i target,float range) //TODO: maybe con8 would be fun but FIXME needs work
+const float path_blocked = std::numeric_limits<float>::infinity();
+
+void map::pathfind_field(v2i target,float range)
 {
-	auto& pfr = pathfinding_field_result;
-	pfr.data.clear();
-	pfr.resize(static_layer.w, static_layer.h,v2i(0,0));
+	dyn_array2d<float>& distances = pathfinding_field_result;
+	distances.data.clear();
+	distances.resize(static_layer.w, static_layer.h,path_blocked);
+	distances(target) =  0;
 
-	pfr(target) = { 0,0 };
-
-	std::queue<v3i> processing_front;
+	std::queue<v2i> processing_front;
 	int irange = int(range);
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < 8; i++)
 	{
-		int dx = con4_dx[i];
-		int dy = con4_dy[i];
+		int dx = con8_dx[i];
+		int dy = con8_dy[i];
 		v2i t = target + v2i(dx, dy);
 		if (is_valid_coord(t))
 		{
 			if (is_passible(t.x, t.y))
 			{
-				pfr(t) = v2i(-dx, -dy);
-				processing_front.push(v3i(t.x,t.y, 1));
+				processing_front.push(t);
+				distances(t) = sqrtf(float(dx*dx + dy*dy));
 			}
 			else
 			{
-				pfr(t) = v2i(path_blocked, path_blocked);
+				distances(t) = path_blocked;
 			}
 		}
 	}
 
 	while (!processing_front.empty())
 	{
-		v3i c = processing_front.front();
+		v2i c = processing_front.front();
 		processing_front.pop();
 
-		for (int i = 0; i < 4; i++)
+		for (int i = 0; i < 8; i++)
 		{
-			int dx = con4_dx[i];
-			int dy = con4_dy[i];
+			int dx = con8_dx[i];
+			int dy = con8_dy[i];
 			v2i t = v2i(int(c.x + dx), int(c.y + dy));
-			int dist = c.z + 1;
+			float cur_dist = distances(c);
+			float dist =sqrtf(float(dx*dx+dy*dy))+cur_dist;
 			
 			if (is_valid_coord(t))
 			{
-				if (pfr(t) != v2i(0, 0) || t == target) //using 0,0 as unprocessed, also the target coord is 0,0
+				float& trg_dist = distances(t);
+				if ((trg_dist < dist) || t == target)//if we dont improve the distance we don't touch it. But we use 0 as unvisited
 				{
 					continue;
 				}
 				if (is_passible(t.x, t.y))
 				{
-					pfr(t) = v2i(-dx, -dy);
+					trg_dist = dist;
 					if (dist >= range)
 						continue;
-					processing_front.push(v3i(t.x, t.y, dist));
+					processing_front.push(v2i(t.x, t.y));
 				}
 				else
 				{
-					pfr(t) = v2i(path_blocked, path_blocked);
+					trg_dist = path_blocked;
 				}
 			}
 		}
@@ -143,7 +145,7 @@ void map::render_reachable(console & trg, const recti & view_rect, const v2i & v
 				tpos.y >= pathfinding_field_result.h || tpos.y < 0)
 				continue;
 			const auto& t = pathfinding_field_result(tpos);
-			if((t.x!=0 || t.y!=0) && (t.x!= path_blocked))
+			if(t!=0 && t!= path_blocked)
 				trg.set_back(v2i(x, y), color);
 		}
 }
@@ -158,30 +160,52 @@ void map::render_path(console & trg, v2i target, const recti & view_rect, const 
 		trg.set_back(target, color_fail);
 		return;
 	}
-	v2i cdelta = pfr(map_coord);
-	if ((cdelta.x == 0 && cdelta.y == 0) ||(cdelta.x== path_blocked))
+	float cur_dist = pfr(map_coord);
+	if ((cur_dist == 0 ) ||(cur_dist == path_blocked))
 	{
 		trg.set_back(target, color_fail);
 		return;
 	}
-
+	
 	while (true)
 	{
 		v2i view_coord = map_coord - view_pos;
 		if (view_rect.is_inside(view_coord))
 			trg.set_back(view_coord, color_ok);
+		float min_dist = path_blocked;
+		v2i cdelta = v2i(0, 0);
+		for (int i = 0; i < 8; i++)
+		{
+			int dx = con8_dx[i];
+			int dy = con8_dy[i];
+			v2i t = map_coord+v2i(dx,dy);
+			if (t.x < 0 || t.y < 0 || t.x >= pfr.w || t.y >= pfr.h)
+				continue;
+			float cd = pfr(t);
+			if (cd < min_dist)
+			{
+				cdelta = v2i(dx, dy);
+				min_dist = cd;
+			}
+		}
+		if (cdelta == v2i(0, 0))
+		{
+			assert(false);
+			trg.set_back(target, color_fail);
+			return;
+		}
 		map_coord +=cdelta;
 		if (map_coord.x >= pfr.w || map_coord.x < 0 || map_coord.y >= pfr.h || map_coord.y < 0)
 		{
 			//TODO: error here?
 			return;
 		}
-		cdelta = pfr(map_coord);
-		if (cdelta.x == 0 && cdelta.y == 0)
+		if (min_dist == 0)
 		{
-			return; //done
+			return;//done
 		}
 	}
+	
 }
 
 void map::tick()
