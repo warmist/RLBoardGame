@@ -260,11 +260,11 @@ struct dyn_array2d
     void resize(int nw, int nh,const T& v=T())
     {
         w = nw; h = nh;
-        data.resize(w*h);
+        data.resize(w*h,v);
     }
 	void resize(v2i size, const T& v = T())
 	{
-		resize(size.x, size.y);
+		resize(size.x, size.y,v);
 	}
     const T& operator()(int x, int y) const
     {
