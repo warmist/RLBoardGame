@@ -13,11 +13,11 @@
 #include <array>
 
 using std::string;
-
+//1020/12=85
 const int map_w = 200;
 const int map_h = 200;
-const int view_w = 100;
-const int view_h = 100;
+const int view_w = 85;
+const int view_h = 85;
 
 std::uniform_int_distribution<int> r_color(0, 255);
 std::mt19937_64 global_rand; //used for non important things
