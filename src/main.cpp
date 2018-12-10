@@ -14,11 +14,11 @@
 #include <array>
 
 using std::string;
-//1020/12=85
+//900/12=85
 const int map_w = 200;
 const int map_h = 200;
-const int view_w = 85;
-const int view_h = 85;
+const int view_w = 75;
+const int view_h = 75;
 
 std::uniform_int_distribution<int> r_color(0, 255);
 std::mt19937_64 global_rand; //used for non important things
@@ -321,6 +321,51 @@ struct card
 		c.set_text(v2i(x + 2, desc_start_y), desc);
 	}
 };
+struct card_deck
+{
+	std::vector<card> cards;
+	int x, y;
+	std::string text;
+	void render(console& c)
+	{
+		v3f border_color = v3f(1, 1, 1);
+		const int w = card::card_w;
+		const int h = card::card_h;
+
+		for (int i = 0; i < w; i++)
+		{
+			for (int j = 0; j < h; j++)
+			{
+				c.set_char(v2i(i + x, j + y), ' ');
+			}
+		}
+
+		for (int i = 0; i < w; i++)
+		{
+			c.set_char(v2i(x + i, y), tile_hline_double, border_color);
+			c.set_char(v2i(x + i, y + h - 1), tile_hline_double, border_color);
+		}
+		for (int i = 0; i < h; i++)
+		{
+			c.set_char(v2i(x, y + i), tile_vline_double, border_color);
+			c.set_char(v2i(x + w - 1, y + i), tile_vline_double, border_color);
+		}
+		c.set_char(v2i(x, y), tile_es_corner_double, border_color);
+		c.set_char(v2i(x + w - 1, y), tile_ws_corner_double, border_color);
+		c.set_char(v2i(x, y + h - 1), tile_ne_corner_double, border_color);
+		c.set_char(v2i(x + w - 1, y + h - 1), tile_wn_corner_double, border_color);
+
+		
+		const int text_start = int(w / 2 - text.length() / 2);
+		c.set_text(v2i(x + text_start, y+4), text);
+		//c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color);
+		//c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
+
+		const int desc_start_y = y + 8;
+		std::string desc = "No.: " + std::to_string(cards.size());
+		c.set_text(v2i(x + 2, desc_start_y), desc);
+	}
+};
 struct card_hand
 {
 	std::vector<card> cards;
@@ -485,6 +530,16 @@ void game_loop(console& graphics_console, console& text_console)
 		state current_state = states.data["game_start"];
 
 		card_hand hand;
+		card_deck deck;
+		deck.y = view_h - card::card_h - 10;
+		deck.x = 0;// -card::card_w / 2;
+		deck.text = "Deck";
+
+		card_deck discard;
+		discard.y = view_h - card::card_h - 10;
+		discard.x = view_w - card::card_w / 2;
+		discard.text = "Discard";
+
 		hand.hand_gui_y = view_h - 8;
 		card t_card;
 		t_card.name = "Strike";
@@ -605,6 +660,8 @@ void game_loop(console& graphics_console, console& text_console)
 			{
 				hand.input(graphics_console);
 				handle_card_use(mouse_down,hand,world,*player,gui_state, cur_needs);
+				deck.render(graphics_console);
+				discard.render(graphics_console);
 				hand.render(graphics_console);
 			}
 			else if (gui_state == gui_state::exiting)
