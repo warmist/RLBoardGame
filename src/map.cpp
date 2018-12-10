@@ -68,7 +68,11 @@ std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
     return pathfinding(static_layer, f, x, y, tx, ty);
 }
 const float path_blocked = std::numeric_limits<float>::infinity();
-
+const float m_sqrt2f = (float)M_SQRT2;
+const float dist_con8[] = {
+	1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f //real
+	//1,1.5f,1,1.5f,1,1.5f,1,1.5f //dnd also needs(?) floorf in two places
+};
 void map::pathfind_field(v2i target,float range)
 {
 	dyn_array2d<float>& distances = pathfinding_field_result;
@@ -88,7 +92,7 @@ void map::pathfind_field(v2i target,float range)
 			if (is_passible(t.x, t.y))
 			{
 				processing_front.push(t);
-				distances(t) = sqrtf(float(dx*dx + dy*dy));
+				distances(t) = dist_con8[i];
 			}
 			else
 			{
@@ -108,7 +112,7 @@ void map::pathfind_field(v2i target,float range)
 			int dy = con8_dy[i];
 			v2i t = v2i(int(c.x + dx), int(c.y + dy));
 			float cur_dist = distances(c);
-			float dist =sqrtf(float(dx*dx+dy*dy))+cur_dist;
+			float dist =dist_con8[i]+cur_dist;
 			
 			if (is_valid_coord(t))
 			{
