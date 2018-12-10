@@ -92,6 +92,7 @@ struct map
     std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
 	void pathfind_field(v2i target,float range);
 	void render_reachable(console& trg, const recti& view_rect, const v2i& view_pos,const v3f& color);
+	std::vector<v2i> get_path(v2i target);
 	void render_path(console& trg, v2i target, const recti& view_rect, const v2i& view_pos, const v3f& color_ok, const v3f& color_fail);
     //helper functions
     inline bool is_valid_coord(int x, int y) const { return x >= 0 && y >= 0 && x < static_layer.w && y < static_layer.h; }

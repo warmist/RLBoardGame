@@ -154,35 +154,31 @@ void map::render_reachable(console & trg, const recti & view_rect, const v2i & v
 		}
 }
 
-void map::render_path(console & trg, v2i target, const recti & view_rect, const v2i & view_pos, const v3f & color_ok, const v3f & color_fail)
+std::vector<v2i> map::get_path(v2i target)
 {
 	auto& pfr = pathfinding_field_result;
-	v2i map_coord = target + view_pos;
-	
-	if (map_coord.x >= pfr.w || map_coord.x < 0 || map_coord.y >= pfr.h || map_coord.y < 0)
+
+	std::vector<v2i> ret;
+	float cur_dist = pfr(target);
+	if ((cur_dist == 0) || (cur_dist == path_blocked))
 	{
-		trg.set_back(target, color_fail);
-		return;
+		
+		return ret;
 	}
-	float cur_dist = pfr(map_coord);
-	if ((cur_dist == 0 ) ||(cur_dist == path_blocked))
-	{
-		trg.set_back(target, color_fail);
-		return;
-	}
-	
+
 	while (true)
 	{
-		v2i view_coord = map_coord - view_pos;
-		if (view_rect.is_inside(view_coord))
-			trg.set_back(view_coord, color_ok);
+		//v2i view_coord = map_coord - view_pos;
+		//if (view_rect.is_inside(view_coord))
+		//	trg.set_back(view_coord, color_ok);
+
 		float min_dist = path_blocked;
 		v2i cdelta = v2i(0, 0);
 		for (int i = 0; i < 8; i++)
 		{
 			int dx = con8_dx[i];
 			int dy = con8_dy[i];
-			v2i t = map_coord+v2i(dx,dy);
+			v2i t = target + v2i(dx, dy);
 			if (t.x < 0 || t.y < 0 || t.x >= pfr.w || t.y >= pfr.h)
 				continue;
 			float cd = pfr(t);
@@ -195,21 +191,42 @@ void map::render_path(console & trg, v2i target, const recti & view_rect, const 
 		if (cdelta == v2i(0, 0))
 		{
 			assert(false);
-			trg.set_back(target, color_fail);
-			return;
+			return std::vector<v2i>();
 		}
-		map_coord +=cdelta;
-		if (map_coord.x >= pfr.w || map_coord.x < 0 || map_coord.y >= pfr.h || map_coord.y < 0)
+		ret.push_back(target);
+		target += cdelta;
+		if (target.x >= pfr.w || target.x < 0 || target.y >= pfr.h || target.y < 0)
 		{
+			assert(false);
 			//TODO: error here?
-			return;
+			return ret;
 		}
 		if (min_dist == 0)
 		{
-			return;//done
+			return ret;//done
 		}
 	}
 	
+}
+
+void map::render_path(console & trg, v2i target, const recti & view_rect, const v2i & view_pos, const v3f & color_ok, const v3f & color_fail)
+{
+	auto& pfr = pathfinding_field_result;
+	v2i map_coord = target + view_pos;
+	
+	if (map_coord.x >= pfr.w || map_coord.x < 0 || map_coord.y >= pfr.h || map_coord.y < 0)
+	{
+		trg.set_back(target, color_fail);
+		return;
+	}
+	auto path = get_path(map_coord);
+	if(path.size() == 0)
+		trg.set_back(target, color_fail);
+	for (auto& p : path)
+	{
+		v2i pv = p - view_pos;
+		trg.set_back(pv, color_ok);
+	}
 }
 
 void map::tick()
