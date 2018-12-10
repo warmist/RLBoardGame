@@ -7,6 +7,7 @@
 #include <functional>
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
+#include <SFML/System.hpp>
 //assets
 #include "asset_cp437_12x12.hpp"
 
@@ -169,6 +170,55 @@ enum class gui_state
 	normal,
 	selecting_target,
 	exiting,
+	animating,
+};
+/*enum class animation_type
+{
+	walk,
+};*/
+const float animation_max_time = 0.5f;
+
+struct animation_data
+{
+	//animation_type type;
+	int step;
+	sf::Clock anim_clock;
+
+	std::vector<v2i> walk_path;
+	entity* walker;
+
+	void start_animation()
+	{
+		step = 0;
+		anim_clock.restart();
+	}
+	int max_steps()
+	{
+		return (int)walk_path.size();
+	}
+	float time_stamp_next_step()
+	{
+		float m = animation_max_time/max_steps();
+		return step*m;
+	}
+	bool done_animation()
+	{
+		return step == max_steps();
+	}
+	void animate_step()
+	{
+		float cur_time = anim_clock.getElapsedTime().asSeconds();
+		if (cur_time < time_stamp_next_step())
+			return;
+		if (step < max_steps())
+		{
+			const auto& p = walk_path[walk_path.size()-step-1];
+			step++;
+
+			walker->x = p.x;
+			walker->y = p.y;
+		}
+	}
 };
 
 enum class card_type
@@ -200,11 +250,12 @@ struct card_needs_data //TODO: duplication/mutable state in card? need better/ni
 	int x, y;
 	//input
 	float distance;
+
+	animation_data animation;
 };
 struct card;
 class e_player;
 using card_action = card_fate(*)(card& ,e_player& , map&, card_needs_data* );
-
 
 constexpr float phi = 1.61803398874989484820f;
 struct card
@@ -568,7 +619,13 @@ void game_loop(console& graphics_console, console& text_console)
 				//render range highlight
 				world.render_reachable(graphics_console, map_window, map_view_pos, v3f(0.1f, 0.2f, 0.5f));
 				//render mouse/path to target
-				world.render_path(graphics_console,get_mouse(graphics_console), map_window, map_view_pos, v3f(0.3f, 0.7f, 0.2f), v3f(0.8f, 0.2f, 0.4f));
+				v2i mouse_pos = get_mouse(graphics_console);
+				auto path = world.get_path(mouse_pos + map_view_pos);
+				v3f color_fail = v3f(0.8f, 0.2f, 0.4f);
+				world.render_path(graphics_console, path, map_window, map_view_pos, v3f(0.3f, 0.7f, 0.2f), color_fail);
+
+				if (path.size() == 0)
+					graphics_console.set_back(mouse_pos, color_fail);
 				//render selected card
 				auto id = hand.selected_card;
 				if (id != -1 && id < hand.cards.size())
@@ -576,8 +633,24 @@ void game_loop(console& graphics_console, console& text_console)
 					auto& card = hand.cards[id];
 					card.render(graphics_console, view_w/2 - card::card_w / 2, view_h - card::card_h);
 				}
+				if (mouse_down)
+				{
+					if (path.size() != 0)
+					{
+						gui_state = gui_state::animating;
+						cur_needs.animation.start_animation();
+						cur_needs.animation.walk_path = path;
+						cur_needs.animation.walker = player;
+					}
+				}
 			}
-			
+			else if (gui_state == gui_state::animating)
+			{
+				cur_needs.animation.animate_step();
+
+				if (cur_needs.animation.done_animation())
+					gui_state = gui_state::normal;
+			}
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);
 			graphics_console.render();

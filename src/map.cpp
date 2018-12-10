@@ -209,23 +209,13 @@ std::vector<v2i> map::get_path(v2i target)
 	
 }
 
-void map::render_path(console & trg, v2i target, const recti & view_rect, const v2i & view_pos, const v3f & color_ok, const v3f & color_fail)
+void map::render_path(console & trg, const std::vector<v2i>& path, const recti & view_rect, const v2i & view_pos, const v3f & color_ok, const v3f & color_fail)
 {
-	auto& pfr = pathfinding_field_result;
-	v2i map_coord = target + view_pos;
-	
-	if (map_coord.x >= pfr.w || map_coord.x < 0 || map_coord.y >= pfr.h || map_coord.y < 0)
-	{
-		trg.set_back(target, color_fail);
-		return;
-	}
-	auto path = get_path(map_coord);
-	if(path.size() == 0)
-		trg.set_back(target, color_fail);
 	for (auto& p : path)
 	{
 		v2i pv = p - view_pos;
-		trg.set_back(pv, color_ok);
+		if(view_rect.is_inside(pv))
+			trg.set_back(pv, color_ok);
 	}
 }
 
