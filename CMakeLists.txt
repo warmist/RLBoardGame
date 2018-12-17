@@ -32,7 +32,7 @@ include_directories(${CEREAL_INCLUDE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/src)
 include_directories(${PROJECT_BINARY_DIR})
 
-#embed_file("${PROJECT_SOURCE_DIR}/assets/Paul_10x10.png")
+embed_file("${PROJECT_SOURCE_DIR}/assets/Paul_10x10.png")
 embed_file("${PROJECT_SOURCE_DIR}/assets/cp437_12x12.png")
 
 SET(LUA "../luajit" CACHE PATH "Path to lua")

@@ -52,7 +52,8 @@ void console::render()
 	sf::RenderWindow* w = &window_;
 	if (parent_)
 		w = &parent_->window_;
-	w->clear();
+	else
+		w->clear();
     auto glypt_w_ = glypth_bounds_.width;
     auto glypt_h_ = glypth_bounds_.height;
 	//Draw background first

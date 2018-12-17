@@ -10,6 +10,7 @@
 #include <SFML/System.hpp>
 //assets
 #include "asset_cp437_12x12.hpp"
+#include "asset_paul_10x10.hpp"
 
 #include <array>
 
@@ -17,8 +18,8 @@ using std::string;
 //900/12=85
 const int map_w = 200;
 const int map_h = 200;
-const int view_w = 75;
-const int view_h = 75;
+const int view_w = 80;
+const int view_h = 80;
 
 std::uniform_int_distribution<int> r_color(0, 255);
 std::mt19937_64 global_rand; //used for non important things
@@ -172,30 +173,27 @@ enum class gui_state
 	exiting,
 	animating,
 };
-/*enum class animation_type
+enum class animation_type
 {
-	walk,
-};*/
+	unit_walk,
+	gui_flash,
+};
 const float animation_max_time = 0.5f;
 
-struct animation_data
+struct anim
 {
 	//animation_type type;
 	int step;
 	sf::Clock anim_clock;
-
-	std::vector<v2i> walk_path;
-	entity* walker;
-
+	animation_type anim_type;
+	virtual ~anim() {}
 	void start_animation()
 	{
 		step = 0;
 		anim_clock.restart();
 	}
-	int max_steps()
-	{
-		return (int)walk_path.size();
-	}
+	virtual int max_steps() = 0;
+	
 	float time_stamp_next_step()
 	{
 		float m = animation_max_time/max_steps();
@@ -205,6 +203,20 @@ struct animation_data
 	{
 		return step == max_steps();
 	}
+	/******************************/
+	virtual void do_step() = 0;
+	/*void anim_step_unit_walk()
+	{
+		const auto& p = walk_path[walk_path.size() - step - 1];
+
+		walker->x = p.x;
+		walker->y = p.y;
+	}
+	void anim_step_gui_flash()
+	{
+		con->set_fore(pos, colors[step]);
+	}*/
+	/******************************/
 	void animate_step()
 	{
 		float cur_time = anim_clock.getElapsedTime().asSeconds();
@@ -212,15 +224,23 @@ struct animation_data
 			return;
 		if (step < max_steps())
 		{
-			const auto& p = walk_path[walk_path.size()-step-1];
+			do_step();
 			step++;
-
-			walker->x = p.x;
-			walker->y = p.y;
 		}
 	}
 };
+using anim_ptr = std::unique_ptr<anim>;
+using anim_vec = std::vector<anim_ptr>;
 
+struct anim_unit_walk :public anim
+{
+	std::vector<v2i> path;
+	entity* walker;
+	int max_steps() override
+	{
+		return (int)path.size();
+	}
+};
 enum class card_type
 {
 	action,
@@ -230,8 +250,8 @@ enum class card_type
 enum class card_needs
 {
 	nothing,
-	target_unit,
-	empty_square,
+	visible_target_unit,
+	walkable_path,
 	//more?
 };
 enum class card_fate
@@ -244,18 +264,19 @@ enum class card_fate
 	draw_pile_bottom,
 	//etc...
 };
-struct card_needs_data //TODO: duplication/mutable state in card? need better/nicer way to store input/output stuff
+struct card_needs_output
 {
-	//output
-	int x, y;
-	//input
+	entity* visible_target_unit;	
+	std::vector<v2i> walkable_path;	
+};
+struct card_needs_input
+{
+	card_needs type=card_needs::nothing;
 	float distance;
-
-	animation_data animation;
 };
 struct card;
-class e_player;
-using card_action = card_fate(*)(card& ,e_player& , map&, card_needs_data* );
+struct game_systems;
+using card_action = void(*)(card& ,game_systems& , card_needs_output* );
 
 constexpr float phi = 1.61803398874989484820f;
 struct card
@@ -265,12 +286,26 @@ struct card
 	static const int card_w = 15;
 	static const int card_h= int(card_w*phi);
 	
+	/*
+		ART and stuff -> type
+		pre-use conditions -> cost, prereq_function (with somehow indicating failure?)
+			* selecting target ?
+		use -> callback with somehow animating/changing world
+		post-use action-> card destroy/move etc...
+
+		NOT handled:
+			* passives
+			* special triggers (e.g. when you are hit)
+	*/
+	//UI and other
 	card_type type=card_type::action;
-	//what to ask when using the card
-	card_needs needs=card_needs::nothing;
-	card_needs_data needs_data; //TODO: UGH...
-	//what to do when card is used
+	//PRE_USE
+	int cost_ap = 0;
+	card_needs_input needs;
+	//USE
 	card_action use_callback = nullptr;
+	//POST_USE
+	card_fate after_use = card_fate::destroy;
 
 	void render(console& c,int x, int y)
 	{
@@ -373,7 +408,7 @@ struct card_hand
 	int hand_gui_y;
 	v2i get_card_extents(int y,int card_no)
 	{
-		bool is_crouded = cards.size()*card::card_w >= view_w;
+		bool is_crouded = cards.size()*card::card_w > view_w;
 		if (is_crouded)
 		{
 			int card_size = (view_w) / int(cards.size()+1);
@@ -459,32 +494,45 @@ public:
 		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
 	}
 };
+struct game_systems
+{
+	e_player* player;
+	map* map;
+	gui_state gui_state = gui_state::normal;
+	anim_ptr animation;
+};
+void act_move(card& c, game_systems& g, card_needs_output* nd)
+{
+	
+}
 card default_move_action()
 {
 	card ret;
 	ret.name = "Run";
 	ret.desc = "Cost      \xad\n\nMove\nRange      5\n\n\n\nRun to\nthe target";
 	ret.type = card_type::generated;
-	ret.needs = card_needs::empty_square;
-	ret.needs_data = { 0,0,5 };
+	ret.needs.type = card_needs::walkable_path;
+	ret.needs.distance = 5;
+	ret.use_callback = &act_move;
 	return ret;
 }
 
-void handle_card_use(bool click,card_hand& hand,map& m,e_player& p,gui_state& current_state,card_needs_data& cur_needs)
+void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_input& cur_needs)
 {
 	if (click && hand.selected_card != -1)
 	{
 
 		auto& card = hand.cards[hand.selected_card];
-		if (card.needs != card_needs::nothing)
+		if (card.needs.type != card_needs::nothing)
 		{
-			current_state = gui_state::selecting_target;
+			g.gui_state = gui_state::selecting_target;
 			cur_needs = card.needs_data;
 			return;
 		}
 		if (card.use_callback)
 		{
-			auto ret=card.use_callback(card, p,m,nullptr );
+			card.use_callback(card,g, &cur_needs);
+			auto ret = card.after_use;
 			switch (ret)
 			{
 			case card_fate::destroy:
@@ -512,18 +560,19 @@ void handle_card_use(bool click,card_hand& hand,map& m,e_player& p,gui_state& cu
 		}
 	}
 }
-card_fate strike_action(card&, e_player&, map&, card_needs_data*)
+void strike_action(card&,game_systems& g, card_needs_data*)
 {
-	return card_fate::destroy;
+	//nop
 }
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
 	bool restart = false;
 	float time = 0;
-	e_player* player = nullptr;
 	while (window.isOpen())
 	{
+		game_systems sys;
+		
 		state_map states;
 		states.init_default_states();
 
@@ -543,13 +592,13 @@ void game_loop(console& graphics_console, console& text_console)
 		hand.hand_gui_y = view_h - 8;
 		card t_card;
 		t_card.name = "Strike";
-		t_card.desc = "Cost      \xad\n\nAttack\nRange      0\nDmg      1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
+		t_card.desc = "Cost     \xad\xad\n\nAttack\nRange     0\nDmg     1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
 		t_card.type = card_type::attack;
 		t_card.use_callback = strike_action;
 		for(int i=0;i<3;i++)
 			hand.cards.push_back(t_card);
 		t_card.name = "Push";
-		t_card.desc = "Cost      \xad\n\nAction\nRange      0\nDistance 1D4\n\n\n\nForce a\nmove";
+		t_card.desc = "Cost      \xad\n\nAction\nRange     0\nDist.   1D4\n\n\n\nForce a\nmove";
 		t_card.type = card_type::action;
 		hand.cards.push_back(t_card);
 		hand.cards.push_back(default_move_action());
@@ -558,7 +607,7 @@ void game_loop(console& graphics_console, console& text_console)
 
 		std::unique_ptr<e_player> ptr_player;
 		ptr_player.reset(new e_player);
-		player = ptr_player.get();
+		auto player = sys.player = ptr_player.get();
 
 		player->x = map_w / 2;
 		player->y = map_h / 2;
@@ -569,12 +618,6 @@ void game_loop(console& graphics_console, console& text_console)
 
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
-		//set_room(world, center.x-15, center.y-15, 30, 30, 0);
-		/*auto core = make_furniture(furniture_type::ai_core);
-		core->pos = v2i(center.x - 3, center.y - 3);
-		core->removed = false;
-		world.furniture.emplace_back(std::move(core));*/
-		//make_worker(world, center.x, center.y);
 		restart = false;
 		v2i from_click;
 		v2i last_mouse;
@@ -585,7 +628,7 @@ void game_loop(console& graphics_console, console& text_console)
 		v2i map_view_pos = { view_w / 2,view_h / 2 };
 
 		bool mouse_down;
-		gui_state gui_state=gui_state::normal;
+
 		card_needs_data cur_needs = { 0 };
 
 		while (!restart && window.isOpen())
@@ -595,7 +638,6 @@ void game_loop(console& graphics_console, console& text_console)
 			mouse_down = false;
 			while (window.pollEvent(event))
 			{
-				//NOTE: changes here need update in docs!
 				// Close window: exit
 				if (event.type == sf::Event::Closed)
 					window.close();
@@ -605,18 +647,18 @@ void game_loop(console& graphics_console, console& text_console)
 					// Escape key: exit
 					if (event.key.code == sf::Keyboard::Escape)
 					{
-						if (gui_state == gui_state::exiting)
+						if (sys.gui_state == gui_state::exiting)
 							window.close();
-						else if (gui_state == gui_state::normal)
-							gui_state = gui_state::exiting;
+						else if (sys.gui_state == gui_state::normal)
+							sys.gui_state = gui_state::exiting;
 						else
-							gui_state = gui_state::normal;
+							sys.gui_state = gui_state::normal;
 					}
 					else
 					{
-						if (gui_state == gui_state::exiting)
+						if (sys.gui_state == gui_state::exiting)
 						{
-							gui_state = gui_state::normal;
+							sys.gui_state = gui_state::normal;
 						}
 					}
 					if (event.key.code == sf::Keyboard::Space)
@@ -656,21 +698,21 @@ void game_loop(console& graphics_console, console& text_console)
 			world.render(graphics_console,map_window, map_view_pos);
 			player->render_gui(graphics_console, 0, 0);
 
-			if(gui_state==gui_state::normal)
+			if(sys.gui_state ==gui_state::normal)
 			{
 				hand.input(graphics_console);
-				handle_card_use(mouse_down,hand,world,*player,gui_state, cur_needs);
+				handle_card_use(mouse_down,hand,sys, cur_needs);
 				deck.render(graphics_console);
 				discard.render(graphics_console);
 				hand.render(graphics_console);
 			}
-			else if (gui_state == gui_state::exiting)
+			else if (sys.gui_state == gui_state::exiting)
 			{
 				int exit_h = view_h / 2;
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?",v3f(0.6f,0,0));
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h+1), "(press esc to confirm, anything else - cancel)");
 			}
-			else if (gui_state == gui_state::selecting_target)
+			else if (sys.gui_state == gui_state::selecting_target)
 			{
 				world.pathfind_field(v2i(player->x, player->y), cur_needs.distance); //TODO: do this only once when player position changes, or card has been selected
 				//render range highlight
@@ -701,7 +743,7 @@ void game_loop(console& graphics_console, console& text_console)
 					}
 				}
 			}
-			else if (gui_state == gui_state::animating)
+			else if (sys.gui_state == gui_state::animating)
 			{
 				cur_needs.animation.animate_step();
 
@@ -710,10 +752,11 @@ void game_loop(console& graphics_console, console& text_console)
 			}
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);
-			graphics_console.render();
-			//if(&text_console!=&graphics_console)
+			//if (&text_console != &graphics_console)
 			//	text_console.render();
-			// Finally, display the rendered frame on screen
+			graphics_console.render();
+			
+
 			window.display();
 		}
 	}
@@ -723,9 +766,9 @@ void game_loop(console& graphics_console, console& text_console)
 
 int main(int argc,char **argv)
 {
-    console text_console(view_w, view_h, font_descriptor(reinterpret_cast<const unsigned char*>(EMB_FILE_cp437_12x12), EMB_FILE_SIZE_cp437_12x12, 12, 12));
+    console text_console(view_w, view_h, font_descriptor(reinterpret_cast<const unsigned char*>(EMB_FILE_Paul_10x10), EMB_FILE_SIZE_Paul_10x10, 10, 10));
 	console& graphics_console = text_console;
-	//console graphics_console(&text_console,view_w * 2, view_h * 2, font_descriptor(Zaratustra_custom_5x5, array_size(Zaratustra_custom_5x5), 5, 5));
+	//console graphics_console(&text_console,(view_w /10)*12, (view_h / 10) * 12, font_descriptor(reinterpret_cast<const unsigned char*>(EMB_FILE_cp437_12x12), EMB_FILE_SIZE_cp437_12x12, 12, 12));
 
 	game_loop(graphics_console,text_console);
   
