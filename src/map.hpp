@@ -41,7 +41,7 @@ enum_helper_decl(entity_type, misc, furniture);
 
 struct entity:public tile_attr
 {
-    int x, y;
+    v2i pos;
     int next_tick = 0;
     bool ticked = false;
     bool removed = false;

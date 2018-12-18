@@ -25,8 +25,7 @@ void map::render(console& trg, const recti& view_rect,const v2i& view_pos)
     for (const auto& e : entities)
     {
         if(!e || e->removed) continue;
-		v2i tpos(e->x, e->y);
-        trg.set_char(tpos-view_pos, e->glyph, e->color_fore,e->color_back);
+        trg.set_char(e->pos-view_pos, e->glyph, e->color_fore,e->color_back);
     }
 
 	
