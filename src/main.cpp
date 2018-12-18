@@ -169,7 +169,7 @@ void dbg_init_world(map& m)
 enum class gui_state
 {
 	normal,
-	selecting_target,
+	selecting_path,
 	exiting,
 	animating,
 };
@@ -239,6 +239,12 @@ struct anim_unit_walk :public anim
 	int max_steps() override
 	{
 		return (int)path.size();
+	}
+	void do_step() override
+	{
+		const auto& p = path[path.size() - step - 1];
+
+		walker->pos = p;
 	}
 };
 enum class card_type
@@ -503,7 +509,12 @@ struct game_systems
 };
 void act_move(card& c, game_systems& g, card_needs_output* nd)
 {
-	
+	auto anim= std::make_unique<anim_unit_walk>();
+	anim->path = nd->walkable_path;
+	anim->walker = g.player;
+	g.animation = std::move(anim);
+	g.animation->start_animation();
+	g.gui_state = gui_state::animating;
 }
 card default_move_action()
 {
@@ -517,7 +528,7 @@ card default_move_action()
 	return ret;
 }
 
-void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_input& cur_needs)
+void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_output& cur_needs)
 {
 	if (click && hand.selected_card != -1)
 	{
@@ -525,8 +536,18 @@ void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_inpu
 		auto& card = hand.cards[hand.selected_card];
 		if (card.needs.type != card_needs::nothing)
 		{
-			g.gui_state = gui_state::selecting_target;
-			cur_needs = card.needs_data;
+			//prep for needs
+			switch (card.needs.type)
+			{
+			case card_needs::visible_target_unit:
+				//todo;
+				break;
+			case card_needs::walkable_path:
+				g.map->pathfind_field(g.player->pos, card.needs.distance);
+				g.gui_state = gui_state::selecting_path;
+				break;
+			}
+			
 			return;
 		}
 		if (card.use_callback)
@@ -560,7 +581,7 @@ void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_inpu
 		}
 	}
 }
-void strike_action(card&,game_systems& g, card_needs_data*)
+void strike_action(card&,game_systems& g, card_needs_output*)
 {
 	//nop
 }
@@ -604,13 +625,12 @@ void game_loop(console& graphics_console, console& text_console)
 		hand.cards.push_back(default_move_action());
 		auto world = map(map_w, map_h);
 		dbg_init_world(world);
-
+		sys.map = &world;
 		std::unique_ptr<e_player> ptr_player;
 		ptr_player.reset(new e_player);
 		auto player = sys.player = ptr_player.get();
 
-		player->x = map_w / 2;
-		player->y = map_h / 2;
+		player->pos = v2i(map_w / 2, map_h / 2);
 		player->glyph = '@';
 		player->color_fore = v3f(1, 1, 1);
 
@@ -629,7 +649,7 @@ void game_loop(console& graphics_console, console& text_console)
 
 		bool mouse_down;
 
-		card_needs_data cur_needs = { 0 };
+		card_needs_output cur_needs;
 
 		while (!restart && window.isOpen())
 		{
@@ -712,9 +732,14 @@ void game_loop(console& graphics_console, console& text_console)
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?",v3f(0.6f,0,0));
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h+1), "(press esc to confirm, anything else - cancel)");
 			}
-			else if (sys.gui_state == gui_state::selecting_target)
+			else if (sys.gui_state == gui_state::selecting_path)
 			{
-				world.pathfind_field(v2i(player->x, player->y), cur_needs.distance); //TODO: do this only once when player position changes, or card has been selected
+				auto id = hand.selected_card;
+				if (id == -1 || id >= hand.cards.size())
+				{
+					assert(false);
+				}
+				auto& card = hand.cards[id];
 				//render range highlight
 				world.render_reachable(graphics_console, map_window, map_view_pos, v3f(0.1f, 0.2f, 0.5f));
 				//render mouse/path to target
@@ -726,29 +751,33 @@ void game_loop(console& graphics_console, console& text_console)
 				if (path.size() == 0)
 					graphics_console.set_back(mouse_pos, color_fail);
 				//render selected card
-				auto id = hand.selected_card;
-				if (id != -1 && id < hand.cards.size())
-				{
-					auto& card = hand.cards[id];
-					card.render(graphics_console, view_w/2 - card::card_w / 2, view_h - card::card_h);
-				}
+				
+				card.render(graphics_console, view_w/2 - card::card_w / 2, view_h - card::card_h);
+				
 				if (mouse_down)
 				{
 					if (path.size() != 0)
 					{
-						gui_state = gui_state::animating;
-						cur_needs.animation.start_animation();
-						cur_needs.animation.walk_path = path;
-						cur_needs.animation.walker = player;
+						cur_needs.walkable_path = path;
+						card.use_callback(card, sys, &cur_needs);
 					}
 				}
 			}
 			else if (sys.gui_state == gui_state::animating)
 			{
-				cur_needs.animation.animate_step();
-
-				if (cur_needs.animation.done_animation())
-					gui_state = gui_state::normal;
+				if (auto anim = sys.animation.get())
+				{
+					anim->animate_step();
+					if(anim->done_animation())
+					{
+						sys.animation.reset();
+						sys.gui_state = gui_state::normal;
+					}
+				}
+				else
+				{
+					sys.gui_state = gui_state::normal;
+				}
 			}
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);
