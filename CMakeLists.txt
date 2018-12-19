@@ -46,7 +46,6 @@ SET(PROJECT_HEADERS
     src/pcg_uint128.hpp
     src/version.hpp
     src/miniz.h
-	src/action.hpp
 	src/gui.hpp
     ${LUA}/lua.hpp
     ${LUA}/lualib.h
