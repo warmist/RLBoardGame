@@ -313,6 +313,41 @@ struct card
 	//POST_USE
 	card_fate after_use = card_fate::destroy;
 
+	
+	bool is_warn_ap=false;
+	sf::Clock warn_ap;
+	float tween_warn(float t)
+	{
+		if (t < 0.4)
+		{
+			float tt = 4 * t - 1;
+			return 1 - tt*tt;
+		}
+		else
+			return -1.067f*t + 1.067f;
+	}
+	v3f get_ap_color()
+	{
+		const float warn_ap_max_t = 0.5;//in sec
+		if (!is_warn_ap)
+		{
+			return v3f(1, 1, 1);
+		}
+		else
+		{
+			float tv=warn_ap.getElapsedTime().asSeconds();
+			if (tv > warn_ap_max_t)
+			{
+				is_warn_ap = false;
+				return v3f(1, 1, 1);
+			}
+			else
+			{
+				float t=tween_warn(tv / warn_ap_max_t);
+				return v3f(1, 0, 0)*t + v3f(1, 1, 1)*(1 - t);
+			}
+		}
+	}
 	void render(console& c,int x, int y)
 	{
 		v3f border_color;
@@ -358,7 +393,11 @@ struct card
 		c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color);
 		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
 
-		const int desc_start_y = y + 1;
+		c.set_text(v2i(x + 2, y + 1), "Cost");
+		for (int i = 0; i<cost_ap;i++)
+			c.set_char(v2i(x + card::card_w - cost_ap+i-2, y + 1), (unsigned char)'\xad',get_ap_color());
+
+		const int desc_start_y = y + 2;
 		c.set_text(v2i(x + 2, desc_start_y), desc);
 	}
 };
@@ -397,10 +436,13 @@ struct card_deck
 		c.set_char(v2i(x + w - 1, y + h - 1), tile_wn_corner_double, border_color);
 
 		
+		
 		const int text_start = int(w / 2 - text.length() / 2);
-		c.set_text(v2i(x + text_start, y+4), text);
+		
+		c.set_text(v2i(x + text_start, y+5), text);
 		//c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color);
 		//c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
+
 
 		const int desc_start_y = y + 8;
 		std::string desc = "No.: " + std::to_string(cards.size());
@@ -481,7 +523,7 @@ class e_player :public entity
 public:
 	virtual const char* name() const { return "player_figurine"; }
 	int actions_per_turn= 2;
-	int current_action = 1;
+	int current_ap = 1;
 	int max_hp = 20;
 	int current_hp = 20;
 	void render_gui(console& c, int x, int y)
@@ -492,9 +534,9 @@ public:
 		c.set_text(v2i(x + 10, y), std::to_string(current_hp) + "/" + std::to_string(max_hp));
 
 		int dx = 0;
-		for (int i = 0; i < actions_per_turn-current_action; i++)
+		for (int i = 0; i < actions_per_turn- current_ap; i++)
 			c.set_char(v2i(x + 10 + (dx++), y + 1), (unsigned char)'\xad', v3f(0.4f, 0.4f, 0.4f));
-		for (int i = 0; i < current_action; i++)
+		for (int i = 0; i < current_ap; i++)
 			c.set_char(v2i(x + 10 + (dx++), y + 1), (unsigned char)'\xad', v3f(1, 1, 1));
 
 		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
@@ -520,7 +562,8 @@ card default_move_action()
 {
 	card ret;
 	ret.name = "Run";
-	ret.desc = "Cost      \xad\n\nMove\nRange      5\n\n\n\nRun to\nthe target";
+	ret.cost_ap = 1;
+	ret.desc = "Move\nRange      5\n\n\n\nRun to\nthe target";
 	ret.type = card_type::generated;
 	ret.needs.type = card_needs::walkable_path;
 	ret.needs.distance = 5;
@@ -532,8 +575,13 @@ void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_outp
 {
 	if (click && hand.selected_card != -1)
 	{
-
 		auto& card = hand.cards[hand.selected_card];
+		if (card.cost_ap > g.player->current_ap)
+		{
+			card.is_warn_ap = true;
+			card.warn_ap.restart();
+			return;
+		}
 		if (card.needs.type != card_needs::nothing)
 		{
 			//prep for needs
@@ -552,6 +600,7 @@ void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_outp
 		}
 		if (card.use_callback)
 		{
+			g.player->current_ap -= card.cost_ap; //FIXME: code duplication
 			card.use_callback(card,g, &cur_needs);
 			auto ret = card.after_use;
 			switch (ret)
@@ -613,13 +662,15 @@ void game_loop(console& graphics_console, console& text_console)
 		hand.hand_gui_y = view_h - 8;
 		card t_card;
 		t_card.name = "Strike";
-		t_card.desc = "Cost     \xad\xad\n\nAttack\nRange     0\nDmg     1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
+		t_card.cost_ap = 2;
+		t_card.desc = "\nAttack\nRange     0\nDmg     1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
 		t_card.type = card_type::attack;
 		t_card.use_callback = strike_action;
 		for(int i=0;i<3;i++)
 			hand.cards.push_back(t_card);
 		t_card.name = "Push";
-		t_card.desc = "Cost      \xad\n\nAction\nRange     0\nDist.   1D4\n\n\n\nForce a\nmove";
+		t_card.cost_ap = 1;
+		t_card.desc = "\nAction\nRange     0\nDist.   1D4\n\n\n\nForce a\nmove";
 		t_card.type = card_type::action;
 		hand.cards.push_back(t_card);
 		hand.cards.push_back(default_move_action());
@@ -759,6 +810,7 @@ void game_loop(console& graphics_console, console& text_console)
 					if (path.size() != 0)
 					{
 						cur_needs.walkable_path = path;
+						sys.player->current_ap -= card.cost_ap;
 						card.use_callback(card, sys, &cur_needs);
 					}
 				}
