@@ -656,12 +656,12 @@ void game_loop(console& graphics_console, console& text_console)
 		card_hand hand;
 		card_deck deck;
 		deck.y = view_h - card::card_h - 10;
-		deck.x = 0;// -card::card_w / 2;
+		deck.x =  -card::card_w*3 / 4;
 		deck.text = "Deck";
 
 		card_deck discard;
 		discard.y = view_h - card::card_h - 10;
-		discard.x = view_w - card::card_w / 2;
+		discard.x = view_w - card::card_w /4;
 		discard.text = "Discard";
 
 		hand.hand_gui_y = view_h - 8;
@@ -701,7 +701,7 @@ void game_loop(console& graphics_console, console& text_console)
 		int ticks_to_do = 0;
 
 		recti map_window = { 0,0,view_w,view_h };
-		v2i map_view_pos = { view_w / 2,view_h / 2 };
+		v2i map_view_pos = { map_w/2-view_w/2,map_h/2-view_h/2 };
 
 		bool mouse_down;
 
