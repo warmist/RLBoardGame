@@ -439,14 +439,19 @@ struct card_deck
 		
 		const int text_start = int(w / 2 - text.length() / 2);
 		
-		c.set_text(v2i(x + text_start, y+5), text);
-		//c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color);
-		//c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
+		c.set_text(v2i(x + text_start, y), text);
+		c.set_char(v2i(x + text_start + int(text.length()), y), tile_nse_t_double, border_color);
+		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
 
 
-		const int desc_start_y = y + 8;
-		std::string desc = "No.: " + std::to_string(cards.size());
-		c.set_text(v2i(x + 2, desc_start_y), desc);
+		const int count_y = y+card::card_h-1;
+		const int buffer_size = 10;
+		char buffer[buffer_size];
+		snprintf(buffer, buffer_size, "Count:%3d", (cards.size()>999)?(999):((int)cards.size()));
+		
+		c.set_text(v2i(x + 3, count_y), buffer);
+		c.set_char(v2i(x + 3 + buffer_size-1, count_y), tile_nse_t_double, border_color);
+		c.set_char(v2i(x + 3 - 1, count_y), tile_nsw_t_double, border_color);
 	}
 };
 struct card_hand
