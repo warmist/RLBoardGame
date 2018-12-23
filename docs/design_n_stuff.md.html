@@ -1,0 +1,63 @@
+# Design doc
+
+A random assortment of game ideas and mechanics thrown together.
+
+# Mechanics
+
+## Wound system
+
+Instead of health have wound cards that get added to the deck or
+hand or discard. Some interesting features:
+* Worst damage gets added to hand, a bit less bad to deck and least
+  problematic to discard
+* The cards could have effects themselves
+    - Auto destroy - some minor wound
+    - Do something bad (e.g. add more wounds) - bleeding?
+    - Need AP to remove
+    - Do not discard at the end
+* Lose if you have e.g. 3 wounds in your hand
+* Healings could remove wounds from hand, then draw, then discard
+
+## Items
+
+Initial idea was to have all cards added because item gives them (e.g. sword
+add 3 strike cards, 1 parry, ...) that has nice features and makes it easy to
+have the deck building by manging items. Games that already do that: [guild of dungeneering][GoD] and [card hunter][ch]. Other random ideas:
+* Item damage that makes it loose cards
+* Item crafting/modification so you further customize your deck
+
+## Skills
+
+This is a twist (or modification) on the items idea. You could get cards from
+items but they only provide POTENTIAL. You need skill to get those cards. This would work like this: Sword (3 fighting, 1 finesse) gives you only 1 card until you raise your skills. Some unanswered questions:
+* How do you raise skills?
+* How to learn new skills?
+
+
+# Misc
+
+* Persistence: do not generate new world each time. Let reexplore the same one.
+    - Raise-dead/ressurect old chars/collect their loot
+    - Somehow remix the world a bit? Collapse some walls, maybe dig some more?
+    - Maybe portal idea links to this
+* Cards that can be played from the deck/discard: Good idea or not?
+* Class/race gives the passives that change how it's played (i.e. [slay the spire artifacts][sts])
+
+## Game state machine
+
+## References
+
+* [Guild of Dungeoneering][GoD]
+* [Card hunter][ch]
+* [Slay the spire][sts]
+* [Book of demons][bod]
+* [Deep sky derelics][dsd]
+* Cultist simulator(?)
+
+[GoD]: https://store.steampowered.com/app/317820/Guild_of_Dungeoneering/
+[ch]: https://store.steampowered.com/app/293260/Card_Hunter/
+[sts]: https://store.steampowered.com/app/646570/Slay_the_Spire/
+[bod]: https://www.gog.com/game/book_of_demons
+[dsd]: https://www.gog.com/game/deep_sky_derelicts
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js" charset="utf-8"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js" charset="utf-8"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>

@@ -703,15 +703,16 @@ void game_loop(console& graphics_console, console& text_console)
 		recti map_window = { 0,0,view_w,view_h };
 		v2i map_view_pos = { map_w / 2 - view_w / 2,map_h / 2 - view_h / 2 };
 
-		bool mouse_down;
-
+		bool mouse_l_down;
+		bool mouse_r_down;
 		card_needs_output cur_needs;
 
 		while (!restart && window.isOpen())
 		{
 			// Process events
 			sf::Event event;
-			mouse_down = false;
+			mouse_l_down = false;
+			mouse_r_down = false;
 			while (window.pollEvent(event))
 			{
 				// Close window: exit
@@ -764,9 +765,12 @@ void game_loop(console& graphics_console, console& text_console)
 				{
 					if(event.mouseButton.button== sf::Mouse::Left)
 					{
-						mouse_down = true;
+						mouse_l_down = true;
 					}
-					
+					if (event.mouseButton.button == sf::Mouse::Right)
+					{
+						mouse_r_down = true;
+					}
 				}
 			}
 
@@ -777,7 +781,7 @@ void game_loop(console& graphics_console, console& text_console)
 			if(sys.gui_state ==gui_state::normal)
 			{
 				hand.input(graphics_console);
-				handle_card_use(mouse_down,hand,sys, cur_needs);
+				handle_card_use(mouse_l_down,hand,sys, cur_needs);
 				deck.render(graphics_console);
 				discard.render(graphics_console);
 				hand.render(graphics_console);
@@ -787,9 +791,14 @@ void game_loop(console& graphics_console, console& text_console)
 				int exit_h = view_h / 2;
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?",v3f(0.6f,0,0));
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h+1), "(press esc to confirm, anything else - cancel)");
+				if (mouse_r_down)
+				{
+					sys.gui_state = gui_state::normal;
+				}
 			}
 			else if (sys.gui_state == gui_state::selecting_path)
 			{
+				
 				auto id = hand.selected_card;
 				if (id == -1 || id >= hand.cards.size())
 				{
@@ -810,7 +819,7 @@ void game_loop(console& graphics_console, console& text_console)
 				
 				card.render(graphics_console, view_w/2 - card::card_w / 2, view_h - card::card_h);
 				
-				if (mouse_down)
+				if (mouse_l_down)
 				{
 					if (path.size() != 0)
 					{
@@ -818,6 +827,10 @@ void game_loop(console& graphics_console, console& text_console)
 						sys.player->current_ap -= card.cost_ap;
 						card.use_callback(card, sys, &cur_needs);
 					}
+				}
+				if (mouse_r_down)
+				{
+					sys.gui_state = gui_state::normal;
 				}
 			}
 			else if (sys.gui_state == gui_state::animating)
