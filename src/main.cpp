@@ -701,7 +701,7 @@ void game_loop(console& graphics_console, console& text_console)
 		int ticks_to_do = 0;
 
 		recti map_window = { 0,0,view_w,view_h };
-		v2i map_view_pos = { map_w/2-view_w/2,map_h/2-view_h/2 };
+		v2i map_view_pos = { map_w / 2 - view_w / 2,map_h / 2 - view_h / 2 };
 
 		bool mouse_down;
 

@@ -3,6 +3,8 @@ project (Tacticus CXX C)
 
 set(TARGET_NAME "Tacticus")
 
+CMAKE_POLICY(SET CMP0074 NEW)
+
 if (MSVC_VERSION GREATER_EQUAL "1900")
     include(CheckCXXCompilerFlag)
     CHECK_CXX_COMPILER_FLAG("/std:c++latest" _cpp_latest_flag_supported)
