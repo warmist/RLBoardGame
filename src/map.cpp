@@ -218,38 +218,9 @@ void map::render_path(console & trg, const std::vector<v2i>& path, const recti &
 	}
 }
 
-void map::tick()
+void map::compact_entities()
 {
-	for(auto& e: entities)
-        {
-            if (e && e->removed)
-            {
-                auto hold = std::move(e);
-                e->before_remove(*this,hold);//could put somewhere to "live on"
-                //end of scope destroys the entity, if it's still in hold
-            }
-            else if (e)
-            {
-                e->ticked = false;
-            }
-        }
-	//compact entities
-
 	entities.erase(std::remove_if(entities.begin(), entities.end(), [](const std::unique_ptr<entity>& a) {return !bool(a); }), entities.end());
-
-	//
-    for (auto& ep : entities)
-    {
-        auto e = ep.get();
-        if (e->removed || e->ticked)
-            continue;
-        if (e->next_tick > 0)
-        {
-            e->next_tick--;
-        }
-        e->ticked = true;
-        e->next_tick = e->tick(*this);
-    } 
 }
 bool map::is_passible(int x, int y)
 {

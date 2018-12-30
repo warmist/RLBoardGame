@@ -186,13 +186,16 @@ struct anim
 	int step;
 	sf::Clock anim_clock;
 	animation_type anim_type;
+
 	virtual ~anim() {}
+	virtual int max_steps() = 0;
+	virtual void do_step() = 0;
+
 	void start_animation()
 	{
 		step = 0;
 		anim_clock.restart();
 	}
-	virtual int max_steps() = 0;
 	
 	float time_stamp_next_step()
 	{
@@ -203,20 +206,6 @@ struct anim
 	{
 		return step == max_steps();
 	}
-	/******************************/
-	virtual void do_step() = 0;
-	/*void anim_step_unit_walk()
-	{
-		const auto& p = walk_path[walk_path.size() - step - 1];
-
-		walker->x = p.x;
-		walker->y = p.y;
-	}
-	void anim_step_gui_flash()
-	{
-		con->set_fore(pos, colors[step]);
-	}*/
-	/******************************/
 	void animate_step()
 	{
 		float cur_time = anim_clock.getElapsedTime().asSeconds();

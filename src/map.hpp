@@ -34,42 +34,17 @@ struct tile_attr
 enum class entity_type
 {
 	misc,
-    worker,
-	furniture,
+	figurine,
 };
-enum_helper_decl(entity_type, misc, furniture);
+enum_helper_decl(entity_type, misc, figurine);
 
 struct entity:public tile_attr
 {
     v2i pos;
-    int next_tick = 0;
-    bool ticked = false;
     bool removed = false;
     entity_type type=entity_type::misc;
 
     virtual ~entity() {}
-
-	virtual const char* name() const { return "misc"; }
-
-    //general tick logic. Return is how many ticks to wait until next call
-    virtual int tick(map& m) 
-    {
-        return 0;
-    }
-    //something bumped into you. Return true if it can swap with you
-    virtual bool bump(entity& other, map& m)
-    {
-        return true;
-    }
-    //gets called before removal from map
-    virtual void before_remove(map& m,std::unique_ptr<entity>& temp_hold)
-    {
-
-    }
-	virtual bool is_same(const entity& other) const
-	{
-		return other.type == type;
-	}
 };
 
 typedef std::unique_ptr<entity> entity_ptr;
@@ -85,9 +60,8 @@ struct map
 	dyn_array2d<float> pathfinding_field_result;
 
     std::vector<entity_ptr> entities;
+	void compact_entities();
 
-	void tick();
-    
     void render(console& trg, const recti& view_rect, const v2i& view_pos);
     std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
 	void pathfind_field(v2i target,float range);
