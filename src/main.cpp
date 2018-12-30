@@ -99,6 +99,14 @@ v2i get_mouse(console& con)
 	p.y /= b.y;
 	return v2i(p.x,p.y);
 }
+bool get_mouse_left()
+{
+	return sf::Mouse::isButtonPressed(sf::Mouse::Left);
+}
+bool get_mouse_right()
+{
+	return sf::Mouse::isButtonPressed(sf::Mouse::Right);
+}
 void draw_asciimap(console& con)
 {
     for(int i=0;i<16;i++)
@@ -168,10 +176,11 @@ void dbg_init_world(map& m)
 }
 enum class gui_state
 {
-	normal,
+	player_turn,
 	selecting_path,
 	exiting,
 	animating,
+	enemy_turn,
 };
 enum class animation_type
 {
@@ -515,17 +524,12 @@ struct card_hand
 class e_player :public entity
 {
 public:
-	virtual const char* name() const { return "player_figurine"; }
 	int actions_per_turn= 2;
 	int current_ap = 1;
-	int max_hp = 20;
-	int current_hp = 20;
 	void render_gui(console& c, int x, int y)
 	{
 		c.set_text(v2i(x, y),   "Health: ");
 		c.set_text(v2i(x, y+1), "Actions:");
-
-		c.set_text(v2i(x + 10, y), std::to_string(current_hp) + "/" + std::to_string(max_hp));
 
 		int dx = 0;
 		for (int i = 0; i < actions_per_turn- current_ap; i++)
@@ -536,12 +540,26 @@ public:
 		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
 	}
 };
+class e_enemy :public entity
+{
+	int current_hp=5;
+	int max_hp=5;
+
+	int move = 3;
+	int dmg = 1;
+};
 struct game_systems
 {
 	e_player* player;
 	map* map;
-	gui_state gui_state = gui_state::normal;
+	gui_state gui_state = gui_state::player_turn;
 	anim_ptr animation;
+
+	card_hand* hand;
+	card_deck* deck;
+	card_deck* discard;
+
+	card_needs_output needs_out;
 };
 void act_move(card& c, game_systems& g, card_needs_output* nd)
 {
@@ -564,9 +582,40 @@ card default_move_action()
 	ret.use_callback = &act_move;
 	return ret;
 }
-
-void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_output& cur_needs)
+void use_card_actual(card& card, game_systems& g)
 {
+	auto& hand = *g.hand;
+	g.player->current_ap -= card.cost_ap;
+	card.use_callback(card, g, &g.needs_out);
+	auto ret = card.after_use;
+	switch (ret)
+	{
+	case card_fate::destroy:
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
+		break;
+	case card_fate::discard:
+		//todo
+		break;
+	case card_fate::hand:
+		//todo
+		break;
+	case card_fate::draw_pile_top:
+		//todo
+		break;
+	case card_fate::draw_pile_rand:
+		//todo
+		break;
+	case card_fate::draw_pile_bottom:
+		//todo
+		break;
+	default:
+		break;
+	}
+}
+void handle_card_use(bool click,game_systems& g)
+{
+	auto& hand = *g.hand;
 	if (click && hand.selected_card != -1)
 	{
 		auto& card = hand.cards[hand.selected_card];
@@ -594,33 +643,7 @@ void handle_card_use(bool click,card_hand& hand,game_systems& g, card_needs_outp
 		}
 		if (card.use_callback)
 		{
-			g.player->current_ap -= card.cost_ap; //FIXME: code duplication
-			card.use_callback(card,g, &cur_needs);
-			auto ret = card.after_use;
-			switch (ret)
-			{
-			case card_fate::destroy:
-				hand.cards.erase(hand.cards.begin() + hand.selected_card);
-				hand.selected_card = -1;
-				break;
-			case card_fate::discard:
-				//todo
-				break;
-			case card_fate::hand:
-				//todo
-				break;
-			case card_fate::draw_pile_top:
-				//todo
-				break;
-			case card_fate::draw_pile_rand:
-				//todo
-				break;
-			case card_fate::draw_pile_bottom:
-				//todo
-				break;
-			default:
-				break;
-			}
+			use_card_actual(card, g);
 		}
 	}
 }
@@ -628,6 +651,7 @@ void strike_action(card&,game_systems& g, card_needs_output*)
 {
 	//nop
 }
+
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -643,6 +667,7 @@ void game_loop(console& graphics_console, console& text_console)
 		state current_state = states.data["game_start"];
 
 		card_hand hand;
+		hand.hand_gui_y = view_h - 8;
 		card_deck deck;
 		deck.y = view_h - card::card_h - 10;
 		deck.x =  -card::card_w*3 / 4;
@@ -653,7 +678,11 @@ void game_loop(console& graphics_console, console& text_console)
 		discard.x = view_w - card::card_w /4;
 		discard.text = "Discard";
 
-		hand.hand_gui_y = view_h - 8;
+		sys.hand = &hand;
+		sys.deck = &deck;
+		sys.discard = &discard;
+
+		////TEMP HAND FILL
 		card t_card;
 		t_card.name = "Strike";
 		t_card.cost_ap = 2;
@@ -668,6 +697,9 @@ void game_loop(console& graphics_console, console& text_console)
 		t_card.type = card_type::action;
 		hand.cards.push_back(t_card);
 		hand.cards.push_back(default_move_action());
+		/////////////////////////
+
+
 		auto world = map(map_w, map_h);
 		dbg_init_world(world);
 		sys.map = &world;
@@ -692,16 +724,11 @@ void game_loop(console& graphics_console, console& text_console)
 		recti map_window = { 0,0,view_w,view_h };
 		v2i map_view_pos = { map_w / 2 - view_w / 2,map_h / 2 - view_h / 2 };
 
-		bool mouse_l_down;
-		bool mouse_r_down;
-		card_needs_output cur_needs;
-
 		while (!restart && window.isOpen())
 		{
 			// Process events
 			sf::Event event;
-			mouse_l_down = false;
-			mouse_r_down = false;
+
 			while (window.pollEvent(event))
 			{
 				// Close window: exit
@@ -715,16 +742,16 @@ void game_loop(console& graphics_console, console& text_console)
 					{
 						if (sys.gui_state == gui_state::exiting)
 							window.close();
-						else if (sys.gui_state == gui_state::normal)
+						else if (sys.gui_state == gui_state::player_turn)
 							sys.gui_state = gui_state::exiting;
 						else
-							sys.gui_state = gui_state::normal;
+							sys.gui_state = gui_state::player_turn;
 					}
 					else
 					{
 						if (sys.gui_state == gui_state::exiting)
 						{
-							sys.gui_state = gui_state::normal;
+							sys.gui_state = gui_state::player_turn;
 						}
 					}
 					if (event.key.code == sf::Keyboard::Space)
@@ -750,27 +777,16 @@ void game_loop(console& graphics_console, console& text_console)
 					}
 					last_mouse = cur_mouse;
 				}
-				if (event.type == sf::Event::MouseButtonPressed)
-				{
-					if(event.mouseButton.button== sf::Mouse::Left)
-					{
-						mouse_l_down = true;
-					}
-					if (event.mouseButton.button == sf::Mouse::Right)
-					{
-						mouse_r_down = true;
-					}
-				}
 			}
 
 			graphics_console.clear();
 			world.render(graphics_console,map_window, map_view_pos);
 			player->render_gui(graphics_console, 0, 0);
 
-			if(sys.gui_state ==gui_state::normal)
+			if(sys.gui_state ==gui_state::player_turn)
 			{
 				hand.input(graphics_console);
-				handle_card_use(mouse_l_down,hand,sys, cur_needs);
+				handle_card_use(get_mouse_left(),sys);
 				deck.render(graphics_console);
 				discard.render(graphics_console);
 				hand.render(graphics_console);
@@ -780,9 +796,9 @@ void game_loop(console& graphics_console, console& text_console)
 				int exit_h = view_h / 2;
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?",v3f(0.6f,0,0));
 				graphics_console.set_text_centered(v2i(view_w / 2, exit_h+1), "(press esc to confirm, anything else - cancel)");
-				if (mouse_r_down)
+				if (get_mouse_right())
 				{
-					sys.gui_state = gui_state::normal;
+					sys.gui_state = gui_state::player_turn;
 				}
 			}
 			else if (sys.gui_state == gui_state::selecting_path)
@@ -808,18 +824,17 @@ void game_loop(console& graphics_console, console& text_console)
 				
 				card.render(graphics_console, view_w/2 - card::card_w / 2, view_h - card::card_h);
 				
-				if (mouse_l_down)
+				if (get_mouse_left())
 				{
 					if (path.size() != 0)
 					{
-						cur_needs.walkable_path = path;
-						sys.player->current_ap -= card.cost_ap;
-						card.use_callback(card, sys, &cur_needs);
+						sys.needs_out.walkable_path = path;
+						use_card_actual(card, sys);
 					}
 				}
-				if (mouse_r_down)
+				if (get_mouse_right())
 				{
-					sys.gui_state = gui_state::normal;
+					sys.gui_state = gui_state::player_turn;
 				}
 			}
 			else if (sys.gui_state == gui_state::animating)
@@ -830,12 +845,12 @@ void game_loop(console& graphics_console, console& text_console)
 					if(anim->done_animation())
 					{
 						sys.animation.reset();
-						sys.gui_state = gui_state::normal;
+						sys.gui_state = gui_state::player_turn;
 					}
 				}
 				else
 				{
-					sys.gui_state = gui_state::normal;
+					sys.gui_state = gui_state::player_turn;
 				}
 			}
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
