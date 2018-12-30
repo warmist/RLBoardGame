@@ -7,7 +7,7 @@ map::map(int w, int h) :static_layer(w,h)
 {
 }
 
-void map::render(console& trg, const recti& view_rect,const v2i& view_pos)
+void map::render(console& trg)
 {
 	v2i view_size = view_rect.size;
     for (int x = view_rect.x(); x <view_size.x; x++)
@@ -136,7 +136,7 @@ void map::pathfind_field(v2i target,float range)
 	}
 }
 
-void map::render_reachable(console & trg, const recti & view_rect, const v2i & view_pos,const v3f& color)
+void map::render_reachable(console & trg, const v3f& color)
 {
 
 	v2i view_size = view_rect.size;
@@ -208,7 +208,7 @@ std::vector<v2i> map::get_path(v2i target)
 	
 }
 
-void map::render_path(console & trg, const std::vector<v2i>& path, const recti & view_rect, const v2i & view_pos, const v3f & color_ok, const v3f & color_fail)
+void map::render_path(console & trg, const std::vector<v2i>& path, const v3f & color_ok, const v3f & color_fail)
 {
 	for (auto& p : path)
 	{

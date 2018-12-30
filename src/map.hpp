@@ -53,6 +53,8 @@ struct console;
 struct map
 {
     map(int w, int h);
+	recti view_rect;
+	v2i   view_pos;
 
     std::mt19937_64 rand;
 
@@ -62,12 +64,12 @@ struct map
     std::vector<entity_ptr> entities;
 	void compact_entities();
 
-    void render(console& trg, const recti& view_rect, const v2i& view_pos);
+    void render(console& trg);
     std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
 	void pathfind_field(v2i target,float range);
-	void render_reachable(console& trg, const recti& view_rect, const v2i& view_pos,const v3f& color);
+	void render_reachable(console& trg,const v3f& color);
 	std::vector<v2i> get_path(v2i target);
-	void render_path(console& trg, const std::vector<v2i>& path, const recti& view_rect, const v2i& view_pos, const v3f& color_ok, const v3f& color_fail);
+	void render_path(console& trg, const std::vector<v2i>& path, const v3f& color_ok, const v3f& color_fail);
     //helper functions
     inline bool is_valid_coord(int x, int y) const { return x >= 0 && y >= 0 && x < static_layer.w && y < static_layer.h; }
 	inline bool is_valid_coord(v2i p) const { return p.x >= 0 && p.y >= 0 && p.x < static_layer.w && p.y < static_layer.h; }

@@ -528,6 +528,7 @@ public:
 	int current_ap = 1;
 	void render_gui(console& c, int x, int y)
 	{
+		//TODO: ugly, boring, not easy to see/use etc...
 		c.set_text(v2i(x, y),   "Health: ");
 		c.set_text(v2i(x, y+1), "Actions:");
 
@@ -651,7 +652,60 @@ void strike_action(card&,game_systems& g, card_needs_output*)
 {
 	//nop
 }
+void handle_player_turn(console& con,game_systems& sys)
+{
+	sys.hand->input(con);
+	handle_card_use(get_mouse_left(), sys);
+	sys.deck->render(con);
+	sys.discard->render(con);
+	sys.hand->render(con);
+}
+void handle_exiting(console& con, game_systems& sys)
+{
+	int exit_h = view_h / 2;
+	con.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?", v3f(0.6f, 0, 0));
+	con.set_text_centered(v2i(view_w / 2, exit_h + 1), "(press esc to confirm, anything else - cancel)");
+	if (get_mouse_right())
+	{
+		sys.gui_state = gui_state::player_turn;
+	}
+}
+void handle_selecting_path(console& con, game_systems& sys)
+{
+	auto& hand = *sys.hand;
+	auto id = hand.selected_card;
+	if (id == -1 || id >= hand.cards.size())
+	{
+		assert(false);
+	}
+	auto& card = hand.cards[id];
+	//render range highlight
+	sys.map->render_reachable(con, v3f(0.1f, 0.2f, 0.5f));
+	//render mouse/path to target
+	v2i mouse_pos = get_mouse(con);
+	auto path = sys.map->get_path(mouse_pos + sys.map->view_pos);
+	v3f color_fail = v3f(0.8f, 0.2f, 0.4f);
+	sys.map->render_path(con, path, v3f(0.3f, 0.7f, 0.2f), color_fail);
 
+	if (path.size() == 0)
+		con.set_back(mouse_pos, color_fail);
+	//render selected card
+
+	card.render(con, view_w / 2 - card::card_w / 2, view_h - card::card_h);
+
+	if (get_mouse_left())
+	{
+		if (path.size() != 0)
+		{
+			sys.needs_out.walkable_path = path;
+			use_card_actual(card, sys);
+		}
+	}
+	if (get_mouse_right())
+	{
+		sys.gui_state = gui_state::player_turn;
+	}
+}
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -701,6 +755,8 @@ void game_loop(console& graphics_console, console& text_console)
 
 
 		auto world = map(map_w, map_h);
+		world.view_rect = { 0,0,view_w,view_h };
+		world.view_pos= { map_w / 2 - view_w / 2,map_h / 2 - view_h / 2 };
 		dbg_init_world(world);
 		sys.map = &world;
 		std::unique_ptr<e_player> ptr_player;
@@ -720,9 +776,6 @@ void game_loop(console& graphics_console, console& text_console)
 		v2i last_mouse;
 
 		int ticks_to_do = 0;
-
-		recti map_window = { 0,0,view_w,view_h };
-		v2i map_view_pos = { map_w / 2 - view_w / 2,map_h / 2 - view_h / 2 };
 
 		while (!restart && window.isOpen())
 		{
@@ -773,69 +826,28 @@ void game_loop(console& graphics_console, console& text_console)
 					if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle))
 					{
 						auto delta = cur_mouse - last_mouse;
-						map_view_pos -= delta;
+						sys.map->view_pos -= delta;
 					}
 					last_mouse = cur_mouse;
 				}
 			}
 
 			graphics_console.clear();
-			world.render(graphics_console,map_window, map_view_pos);
+			//state independant stuff
+			world.render(graphics_console);
 			player->render_gui(graphics_console, 0, 0);
-
+			//state dep. stuff
 			if(sys.gui_state ==gui_state::player_turn)
 			{
-				hand.input(graphics_console);
-				handle_card_use(get_mouse_left(),sys);
-				deck.render(graphics_console);
-				discard.render(graphics_console);
-				hand.render(graphics_console);
+				handle_player_turn(graphics_console, sys);
 			}
 			else if (sys.gui_state == gui_state::exiting)
 			{
-				int exit_h = view_h / 2;
-				graphics_console.set_text_centered(v2i(view_w / 2, exit_h), "Are you sure you want to exit?",v3f(0.6f,0,0));
-				graphics_console.set_text_centered(v2i(view_w / 2, exit_h+1), "(press esc to confirm, anything else - cancel)");
-				if (get_mouse_right())
-				{
-					sys.gui_state = gui_state::player_turn;
-				}
+				handle_exiting(graphics_console, sys);
 			}
 			else if (sys.gui_state == gui_state::selecting_path)
 			{
-				
-				auto id = hand.selected_card;
-				if (id == -1 || id >= hand.cards.size())
-				{
-					assert(false);
-				}
-				auto& card = hand.cards[id];
-				//render range highlight
-				world.render_reachable(graphics_console, map_window, map_view_pos, v3f(0.1f, 0.2f, 0.5f));
-				//render mouse/path to target
-				v2i mouse_pos = get_mouse(graphics_console);
-				auto path = world.get_path(mouse_pos + map_view_pos);
-				v3f color_fail = v3f(0.8f, 0.2f, 0.4f);
-				world.render_path(graphics_console, path, map_window, map_view_pos, v3f(0.3f, 0.7f, 0.2f), color_fail);
-
-				if (path.size() == 0)
-					graphics_console.set_back(mouse_pos, color_fail);
-				//render selected card
-				
-				card.render(graphics_console, view_w/2 - card::card_w / 2, view_h - card::card_h);
-				
-				if (get_mouse_left())
-				{
-					if (path.size() != 0)
-					{
-						sys.needs_out.walkable_path = path;
-						use_card_actual(card, sys);
-					}
-				}
-				if (get_mouse_right())
-				{
-					sys.gui_state = gui_state::player_turn;
-				}
+				handle_selecting_path(graphics_console, sys);
 			}
 			else if (sys.gui_state == gui_state::animating)
 			{
