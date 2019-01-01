@@ -116,7 +116,7 @@ void map::pathfind_field(v2i target,float range)
 			if (is_valid_coord(t))
 			{
 				float& trg_dist = distances(t);
-				if ((trg_dist < dist) || t == target)//if we dont improve the distance we don't touch it. But we use 0 as unvisited
+				if ((trg_dist <= dist) || t == target)//if we dont improve the distance we don't touch it. But we use 0 as unvisited
 				{
 					continue;
 				}
@@ -153,7 +153,7 @@ void map::render_reachable(console & trg, const v3f& color)
 		}
 }
 
-std::vector<v2i> map::get_path(v2i target)
+std::vector<v2i> map::get_path(v2i target,int max_len)
 {
 	auto& pfr = pathfinding_field_result;
 
@@ -193,6 +193,10 @@ std::vector<v2i> map::get_path(v2i target)
 			return std::vector<v2i>();
 		}
 		ret.push_back(target);
+		if (max_len > 0 && ret.size() >= max_len)
+		{
+			return ret; //quit early as walked MAX_LEN of path
+		}
 		target += cdelta;
 		if (target.x >= pfr.w || target.x < 0 || target.y >= pfr.h || target.y < 0)
 		{

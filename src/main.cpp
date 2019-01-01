@@ -240,11 +240,46 @@ struct anim_unit_walk :public anim
 	}
 	void do_step() override
 	{
-		const auto& p = path[path.size() - step - 1];
+		const auto& p = path[step];
 
 		walker->pos = p;
 	}
 };
+//player receives damage
+struct anim_player_damage :public anim
+{
+	entity* player;
+	int damage_to_do;
+
+	static const int tween_frames = 10;
+
+	v3f original_color;
+	int max_steps() override
+	{
+		return (int)damage_to_do*tween_frames;
+	}
+	v3f tween_func(int s)
+	{
+		float sf = (float)s / (float)tween_frames;
+		float f = 1-sf*sf*sf*sf;
+		return v3f(1, 0, 0)*f + original_color*(1 - f);
+	}
+	void do_step() override
+	{
+		if (step == 0)
+		{
+			original_color = player->color_fore;
+		}
+		//blink red for now
+		int tween_step = step % tween_frames;
+		player->color_fore = tween_func(tween_step);
+		if (step == max_steps()-1)
+		{
+			player->color_fore = original_color;
+		}
+	}
+};
+
 enum class card_type
 {
 	action,
@@ -525,7 +560,7 @@ class e_player :public entity
 {
 public:
 	int actions_per_turn= 2;
-	int current_ap = 1;
+	int current_ap = 2;
 	void render_gui(console& c, int x, int y)
 	{
 		//TODO: ugly, boring, not easy to see/use etc...
@@ -541,7 +576,7 @@ public:
 		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
 	}
 };
-class e_enemy :public entity
+struct e_enemy :public entity
 {
 	int current_hp=5;
 	int max_hp=5;
@@ -549,14 +584,33 @@ class e_enemy :public entity
 	int move = 3;
 	int dmg = 1;
 
-	//simulation time data
-	int current_move = 0;
-	int current_dmg = 0;
+	//simulation stuff
+	bool done_move = false;
+	bool done_dmg = false;
+};
+
+//enemy receives damage
+struct anim_enemy_damage :public anim
+{
+	e_enemy* enemy;
+	int damage_to_do;
+	int max_steps() override
+	{
+		return (int)damage_to_do;
+	}
+	void do_step() override
+	{
+		//blink enemy few times
+		enemy->current_hp--;
+	}
 };
 struct enemy_turn_data
 {
 	std::vector<e_enemy*> enemies;
 	int current_enemy_turn=0;
+	bool current_enemy_changed = false;
+
+	anim_ptr current_animation=nullptr;
 };
 struct game_systems
 {
@@ -577,6 +631,7 @@ void act_move(card& c, game_systems& g, card_needs_output* nd)
 {
 	auto anim= std::make_unique<anim_unit_walk>();
 	anim->path = nd->walkable_path;
+	std::reverse(anim->path.begin(), anim->path.end());
 	anim->walker = g.player;
 	g.animation = std::move(anim);
 	g.animation->start_animation();
@@ -735,6 +790,7 @@ void handle_animating(console& con, game_systems& sys)
 }
 void handle_enemy_turn(console& con, game_systems& sys)
 {
+	const float max_player_distance = 30;
 	if (!sys.e_turn)
 	{
 		//if called first time, fill out entity data
@@ -748,6 +804,9 @@ void handle_enemy_turn(console& con, game_systems& sys)
 			}
 		}
 		sys.e_turn->current_enemy_turn = 0;
+		sys.e_turn->current_enemy_changed = true;
+
+		sys.map->pathfind_field(sys.player->pos, max_player_distance);
 	}
 	auto& edata = *sys.e_turn;
 	//if none are left, switch the state to player turn
@@ -755,13 +814,75 @@ void handle_enemy_turn(console& con, game_systems& sys)
 	{
 		sys.e_turn.reset();
 		sys.gui_state = gui_state::player_turn;
+
+		//TODO: put this somewhere global?
+		sys.player->current_ap = sys.player->actions_per_turn;
+		return;
 	}
-	//figure out which one we are simulating this tick
-	//TODO
+	if (edata.current_animation)
+	{
+		//just animate without thinking too much
+		auto anim = edata.current_animation.get();
+
+		anim->animate_step();
+		if (anim->done_animation())
+		{
+			edata.current_animation.reset();
+		}
+		else
+		{
+			return; //bail early. we've done something already OR we are waiting for next frame!
+		}
+	}
+	auto& simulated = *edata.enemies[edata.current_enemy_turn];
+
+	if (edata.current_enemy_changed)
+	{
+		edata.current_enemy_changed = false;
+
+		simulated.done_dmg = false;
+		simulated.done_move = false;
+	}
 	//animate it's actions
-	//TODO
+	bool enemy_done = false;
+	if (!simulated.done_move)
+	{
+		simulated.done_move = true;
+
+		auto anim = std::make_unique<anim_unit_walk>();
+		anim->path = sys.map->get_path(simulated.pos, simulated.move+1);
+		anim->walker = &simulated;
+		anim->start_animation();
+
+		edata.current_animation= std::move(anim);	
+		return;
+	}
+	else if (!simulated.done_dmg)
+	{
+		simulated.done_dmg = true;
+
+		auto delta = sys.player->pos - simulated.pos;
+		if(abs(delta.x)<=1 && abs(delta.y)<=1)
+		{
+			auto anim = std::make_unique<anim_player_damage>();
+			anim->player = sys.player;
+			anim->damage_to_do = simulated.dmg;
+			anim->start_animation();
+		
+			edata.current_animation = std::move(anim);
+		}
+		return;
+	}
+	else
+	{
+		enemy_done = true;
+	}
 	//switch to the other one
-	edata.current_enemy_turn++;
+	if (enemy_done=true)
+	{
+		edata.current_enemy_turn++;
+		edata.current_enemy_changed = true;
+	}
 }
 void game_loop(console& graphics_console, console& text_console)
 {
@@ -840,6 +961,18 @@ void game_loop(console& graphics_console, console& text_console)
 
 			world.entities.emplace_back(enemy);
 		}
+		{
+			auto enemy = new e_enemy;
+
+			enemy->pos = v2i(map_w / 2 - 15, map_h / 2);
+			enemy->glyph = 'G';
+			enemy->dmg = 3;
+			enemy->move = 1;
+			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
+			enemy->type = entity_type::enemy;
+
+			world.entities.emplace_back(enemy);
+		}
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
 		restart = false;
@@ -881,6 +1014,7 @@ void game_loop(console& graphics_console, console& text_console)
 					if (event.key.code == sf::Keyboard::Space)
 					{
 						current_state = states.next_state(current_state);
+						sys.gui_state = gui_state::enemy_turn;
 					}
 					if (event.key.code == sf::Keyboard::S)
 						save_map(world);
