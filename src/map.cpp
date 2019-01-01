@@ -152,7 +152,6 @@ void map::render_reachable(console & trg, const v3f& color)
 				trg.set_back(v2i(x, y), color);
 		}
 }
-
 std::vector<v2i> map::get_path(v2i target,int max_len)
 {
 	auto& pfr = pathfinding_field_result;

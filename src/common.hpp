@@ -65,6 +65,7 @@ struct v2
     bool operator !=(const v2& other) const { return x != other.x || y != other.y; }
 
     T dot(const v2& other) const { return other.x*x + other.y*y; }
+	float dotf(const v2& other) const { return (float)other.x*(float)x + (float)other.y*(float)y; }
 
     template<typename A>
     void serialize(A& archive)

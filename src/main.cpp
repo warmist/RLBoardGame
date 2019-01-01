@@ -178,6 +178,7 @@ enum class gui_state
 {
 	player_turn,
 	selecting_path,
+	selecting_enemy,
 	exiting,
 	animating,
 	enemy_turn,
@@ -245,46 +246,13 @@ struct anim_unit_walk :public anim
 		walker->pos = p;
 	}
 };
-//player receives damage
-struct anim_player_damage :public anim
-{
-	entity* player;
-	int damage_to_do;
 
-	static const int tween_frames = 10;
-
-	v3f original_color;
-	int max_steps() override
-	{
-		return (int)damage_to_do*tween_frames;
-	}
-	v3f tween_func(int s)
-	{
-		float sf = (float)s / (float)tween_frames;
-		float f = 1-sf*sf*sf*sf;
-		return v3f(1, 0, 0)*f + original_color*(1 - f);
-	}
-	void do_step() override
-	{
-		if (step == 0)
-		{
-			original_color = player->color_fore;
-		}
-		//blink red for now
-		int tween_step = step % tween_frames;
-		player->color_fore = tween_func(tween_step);
-		if (step == max_steps()-1)
-		{
-			player->color_fore = original_color;
-		}
-	}
-};
 
 enum class card_type
 {
 	action,
 	generated,
-	attack,
+	wound,
 };
 enum class card_needs
 {
@@ -388,7 +356,7 @@ struct card
 			border_color = { 0.08f, 0.04f, 0.37f };
 		else if (type == card_type::action)
 			border_color = { 0.57f, 0.44f, 0.07f };
-		else if (type == card_type::attack)
+		else if (type == card_type::wound)
 			border_color = { 0.76f, 0.04f, 0.01f };
 
 		/*
@@ -425,13 +393,15 @@ struct card
 		c.set_text(v2i(x + text_start, y), name);
 		c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color);
 		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
-
-		c.set_text(v2i(x + 2, y + 1), "Cost");
-		for (int i = 0; i<cost_ap;i++)
-			c.set_char(v2i(x + card::card_w - cost_ap+i-2, y + 1), (unsigned char)'\xad',get_ap_color());
-
-		const int desc_start_y = y + 2;
-		c.set_text(v2i(x + 2, desc_start_y), desc);
+		int cur_y = y + 1;
+		if(type != card_type::wound) //TODO: replace with "usable" flag?
+		{
+			c.set_text(v2i(x + 2, cur_y), "Cost");
+			for (int i = 0; i<cost_ap;i++)
+				c.set_char(v2i(x + card::card_w - cost_ap+i-2, cur_y), (unsigned char)'\xad',get_ap_color());
+			cur_y++;
+		}
+		c.set_text(v2i(x + 2, cur_y), desc);
 	}
 };
 struct card_deck
@@ -556,6 +526,53 @@ struct card_hand
 		}
 	}
 };
+card wound_card()
+{
+	card t_card;
+	t_card.name = "Wound";
+	t_card.desc = "Loose game\nif 3 are\nin hand";
+	t_card.type = card_type::wound;
+	return t_card;
+}
+//player receives damage
+struct anim_player_damage :public anim
+{
+	entity* player;
+	card_hand* player_wound_hand;
+	int damage_to_do;
+
+	static const int tween_frames = 10;
+
+	v3f original_color;
+	int max_steps() override
+	{
+		return (int)damage_to_do*tween_frames;
+	}
+	v3f tween_func(int s)
+	{
+		float sf = (float)s / (float)tween_frames;
+		float f = 1 - sf*sf*sf*sf;
+		return v3f(1, 0, 0)*f + original_color*(1 - f);
+	}
+	void do_step() override
+	{
+		if (step == 0)
+		{
+			original_color = player->color_fore;
+		}
+		//blink red for now
+		int tween_step = step % tween_frames;
+		player->color_fore = tween_func(tween_step);
+		if (step == max_steps() - 1)
+		{
+			player->color_fore = original_color;
+		}
+		if (tween_step == tween_frames - 1)
+		{
+			player_wound_hand->cards.push_back(wound_card());
+		}
+	}
+};
 class e_player :public entity
 {
 public:
@@ -594,14 +611,36 @@ struct anim_enemy_damage :public anim
 {
 	e_enemy* enemy;
 	int damage_to_do;
+	static const int tween_frames = 10;
+
+	v3f original_color;
 	int max_steps() override
 	{
-		return (int)damage_to_do;
+		return (int)damage_to_do*tween_frames;
+	}
+	v3f tween_func(int s)
+	{
+		float sf = (float)s / (float)tween_frames;
+		float f = 1 - sf*sf*sf*sf;
+		return v3f(1, 0, 0)*f + original_color*(1 - f);
 	}
 	void do_step() override
 	{
-		//blink enemy few times
-		enemy->current_hp--;
+		if (step == 0)
+		{
+			original_color = enemy->color_fore;
+		}
+		//blink red for now
+		int tween_step = step % tween_frames;
+		enemy->color_fore = tween_func(tween_step);
+		if (step == max_steps() - 1)
+		{
+			enemy->color_fore = original_color;
+		}
+		if (tween_step == tween_frames - 1)
+		{
+			enemy->current_hp--;
+		}
 	}
 };
 struct enemy_turn_data
@@ -620,8 +659,11 @@ struct game_systems
 	//state specific stuff
 	anim_ptr animation;
 	std::unique_ptr<enemy_turn_data> e_turn;
+	std::vector<e_enemy*> enemy_choices;
 	//
 	card_hand* hand;
+	card_hand* wounds_added;
+
 	card_deck* deck;
 	card_deck* discard;
 
@@ -662,22 +704,49 @@ void use_card_actual(card& card, game_systems& g)
 		hand.selected_card = -1;
 		break;
 	case card_fate::discard:
-		//todo
+		g.discard->cards.push_back(card);
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
 		break;
 	case card_fate::hand:
-		//todo
+		//do nothing?
 		break;
 	case card_fate::draw_pile_top:
-		//todo
+		g.deck->cards.insert(g.deck->cards.begin(), card);
+
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
 		break;
 	case card_fate::draw_pile_rand:
-		//todo
+		g.deck->cards.insert(g.deck->cards.begin()+rand()%g.deck->cards.size(), card);
+
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
 		break;
 	case card_fate::draw_pile_bottom:
-		//todo
+		g.deck->cards.insert(g.deck->cards.end, card);
+
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
 		break;
 	default:
 		break;
+	}
+}
+void fill_enemy_choices(v2i center, float distance,map& m, std::vector<e_enemy*>& enemies)
+{
+	enemies.clear();
+	float dist_sqr = distance*distance;
+	for (auto& e : m.entities)
+	{
+		if (e->type != entity_type::enemy)
+			continue;
+		auto delta = e->pos - center;
+		float v = delta.dotf(delta);
+		if (v <= dist_sqr)
+		{
+			enemies.push_back(static_cast<e_enemy*>(e.get()));
+		}
 	}
 }
 void handle_card_use(bool click,game_systems& g)
@@ -698,12 +767,15 @@ void handle_card_use(bool click,game_systems& g)
 			switch (card.needs.type)
 			{
 			case card_needs::visible_target_unit:
-				//todo;
+				fill_enemy_choices(g.player->pos, card.needs.distance, *g.map, g.enemy_choices);				
+				g.gui_state = gui_state::selecting_enemy;
 				break;
 			case card_needs::walkable_path:
 				g.map->pathfind_field(g.player->pos, card.needs.distance);
 				g.gui_state = gui_state::selecting_path;
 				break;
+			default:
+				assert(false);
 			}
 			
 			return;
@@ -714,9 +786,37 @@ void handle_card_use(bool click,game_systems& g)
 		}
 	}
 }
-void strike_action(card&,game_systems& g, card_needs_output*)
+void strike_action(card&,game_systems& g, card_needs_output* needs)
 {
-	//nop
+	auto anim = std::make_unique<anim_enemy_damage>();
+	anim->enemy = static_cast<e_enemy*>(needs->visible_target_unit);
+	anim->damage_to_do = rand() % 6 + 1;
+
+	g.animation = std::move(anim);
+	g.animation->start_animation();
+	g.gui_state = gui_state::animating;
+}
+card strike_card()
+{
+	card t_card;
+	t_card.name = "Strike";
+	t_card.cost_ap = 2;
+	t_card.desc = "\nAttack\nRange     0\nDmg     1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
+	t_card.type = card_type::action;
+	t_card.use_callback = strike_action;
+	t_card.needs.distance = 2;
+	t_card.needs.type = card_needs::visible_target_unit;
+	return t_card;
+}
+card push_card()
+{
+	//TODO: unfinished
+	card t_card;
+	t_card.name = "Push";
+	t_card.cost_ap = 1;
+	t_card.desc = "\nAction\nRange     0\nDist.   1D4\n\n\n\nForce a\nmove";
+	t_card.type = card_type::action;
+	return t_card;
 }
 void handle_player_turn(console& con,game_systems& sys)
 {
@@ -765,6 +865,64 @@ void handle_selecting_path(console& con, game_systems& sys)
 		{
 			sys.needs_out.walkable_path = path;
 			use_card_actual(card, sys);
+			return;
+		}
+	}
+	if (get_mouse_right())
+	{
+		sys.gui_state = gui_state::player_turn;
+	}
+}
+void handle_selecting_enemy(console& con, game_systems& sys)
+{
+	auto& hand = *sys.hand;
+	auto id = hand.selected_card;
+	if (id == -1 || id >= hand.cards.size())
+	{
+		assert(false);
+	}
+	auto& card = hand.cards[id];
+	auto& choices = sys.enemy_choices;
+	//highlight possible choices
+	const v3f color_choice = v3f(0.1f, 0.2f, 0.5f);
+	const v3f color_fail = v3f(0.8f, 0.2f, 0.4f);
+	const v3f color_ok = v3f(0.3f, 0.7f, 0.2f);
+
+	v2i mouse_pos = get_mouse(con);
+
+	auto view_pos  = sys.map->view_pos;
+	auto view_rect = sys.map->view_rect;
+	int selected_id = -1;
+
+	for(int i=0;i<(int)choices.size();i++)
+	{
+		auto& e = choices[i];
+		auto p=e->pos - view_pos;
+		if (view_rect.is_inside(view_pos))
+		{
+			v3f color=color_choice;
+			if(p==mouse_pos) //highlight (and select) current target
+			{
+				color = color_ok;
+				selected_id = i;
+			}
+			con.set_back(p, color);
+		}
+	}
+	if (selected_id == -1)
+	{
+		con.set_back(mouse_pos, color_fail);
+	}
+	//render selected card
+	card.render(con, view_w / 2 - card::card_w / 2, view_h - card::card_h);
+
+	if (get_mouse_left())
+	{
+		if (choices.size() != 0 && selected_id != -1)
+		{
+			sys.needs_out.visible_target_unit = choices[selected_id];
+			use_card_actual(card, sys);
+			return;
 		}
 	}
 	if (get_mouse_right())
@@ -790,6 +948,7 @@ void handle_animating(console& con, game_systems& sys)
 }
 void handle_enemy_turn(console& con, game_systems& sys)
 {
+	sys.wounds_added->render(con);
 	const float max_player_distance = 30;
 	if (!sys.e_turn)
 	{
@@ -866,6 +1025,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		{
 			auto anim = std::make_unique<anim_player_damage>();
 			anim->player = sys.player;
+			anim->player_wound_hand = sys.wounds_added;
 			anim->damage_to_do = simulated.dmg;
 			anim->start_animation();
 		
@@ -900,6 +1060,9 @@ void game_loop(console& graphics_console, console& text_console)
 
 		card_hand hand;
 		hand.hand_gui_y = view_h - 8;
+		card_hand wound_hand;
+		wound_hand.hand_gui_y = view_h - 8;
+
 		card_deck deck;
 		deck.y = view_h - card::card_h - 10;
 		deck.x =  -card::card_w+3;
@@ -911,23 +1074,15 @@ void game_loop(console& graphics_console, console& text_console)
 		discard.text = "Discard";
 
 		sys.hand = &hand;
+		sys.wounds_added = &wound_hand;
 		sys.deck = &deck;
 		sys.discard = &discard;
 
 		////TEMP HAND FILL
-		card t_card;
-		t_card.name = "Strike";
-		t_card.cost_ap = 2;
-		t_card.desc = "\nAttack\nRange     0\nDmg     1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
-		t_card.type = card_type::attack;
-		t_card.use_callback = strike_action;
+
 		for(int i=0;i<3;i++)
-			hand.cards.push_back(t_card);
-		t_card.name = "Push";
-		t_card.cost_ap = 1;
-		t_card.desc = "\nAction\nRange     0\nDist.   1D4\n\n\n\nForce a\nmove";
-		t_card.type = card_type::action;
-		hand.cards.push_back(t_card);
+			hand.cards.push_back(strike_card());
+
 		hand.cards.push_back(default_move_action());
 		/////////////////////////
 
@@ -1053,6 +1208,10 @@ void game_loop(console& graphics_console, console& text_console)
 			else if (sys.gui_state == gui_state::selecting_path)
 			{
 				handle_selecting_path(graphics_console, sys);
+			}
+			else if (sys.gui_state == gui_state::selecting_enemy)
+			{
+				handle_selecting_enemy(graphics_console, sys);
 			}
 			else if (sys.gui_state == gui_state::animating)
 			{
