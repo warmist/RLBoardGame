@@ -548,14 +548,25 @@ class e_enemy :public entity
 
 	int move = 3;
 	int dmg = 1;
+
+	//simulation time data
+	int current_move = 0;
+	int current_dmg = 0;
+};
+struct enemy_turn_data
+{
+	std::vector<e_enemy*> enemies;
+	int current_enemy_turn=0;
 };
 struct game_systems
 {
 	e_player* player;
 	map* map;
 	gui_state gui_state = gui_state::player_turn;
+	//state specific stuff
 	anim_ptr animation;
-
+	std::unique_ptr<enemy_turn_data> e_turn;
+	//
 	card_hand* hand;
 	card_deck* deck;
 	card_deck* discard;
@@ -706,6 +717,52 @@ void handle_selecting_path(console& con, game_systems& sys)
 		sys.gui_state = gui_state::player_turn;
 	}
 }
+void handle_animating(console& con, game_systems& sys)
+{
+	if (auto anim = sys.animation.get())
+	{
+		anim->animate_step();
+		if (anim->done_animation())
+		{
+			sys.animation.reset();
+			sys.gui_state = gui_state::player_turn;
+		}
+	}
+	else
+	{
+		sys.gui_state = gui_state::player_turn;
+	}
+}
+void handle_enemy_turn(console& con, game_systems& sys)
+{
+	if (!sys.e_turn)
+	{
+		//if called first time, fill out entity data
+		sys.e_turn.reset(new enemy_turn_data);
+		auto& v = sys.e_turn->enemies;
+		for (auto& en : sys.map->entities)
+		{
+			if (en->type == entity_type::enemy)
+			{
+				v.push_back(static_cast<e_enemy*>(en.get()));
+			}
+		}
+		sys.e_turn->current_enemy_turn = 0;
+	}
+	auto& edata = *sys.e_turn;
+	//if none are left, switch the state to player turn
+	if (edata.current_enemy_turn >= edata.enemies.size())
+	{
+		sys.e_turn.reset();
+		sys.gui_state = gui_state::player_turn;
+	}
+	//figure out which one we are simulating this tick
+	//TODO
+	//animate it's actions
+	//TODO
+	//switch to the other one
+	edata.current_enemy_turn++;
+}
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -724,7 +781,7 @@ void game_loop(console& graphics_console, console& text_console)
 		hand.hand_gui_y = view_h - 8;
 		card_deck deck;
 		deck.y = view_h - card::card_h - 10;
-		deck.x =  -card::card_w*3 / 4;
+		deck.x =  -card::card_w+3;
 		deck.text = "Deck";
 
 		card_deck discard;
@@ -759,16 +816,30 @@ void game_loop(console& graphics_console, console& text_console)
 		world.view_pos= { map_w / 2 - view_w / 2,map_h / 2 - view_h / 2 };
 		dbg_init_world(world);
 		sys.map = &world;
-		std::unique_ptr<e_player> ptr_player;
-		ptr_player.reset(new e_player);
-		auto player = sys.player = ptr_player.get();
 
-		player->pos = v2i(map_w / 2, map_h / 2);
-		player->glyph = '@';
-		player->color_fore = v3f(1, 1, 1);
+		{
+			std::unique_ptr<e_player> ptr_player;
+		
+			ptr_player.reset(new e_player);
+			auto player = sys.player = ptr_player.get();
 
-		world.entities.emplace_back(std::move(ptr_player));
+			player->pos = v2i(map_w / 2, map_h / 2);
+			player->glyph = '@';
+			player->color_fore = v3f(1, 1, 1);
+			player->type = entity_type::player;
 
+			world.entities.emplace_back(std::move(ptr_player));
+		}
+		{
+			auto enemy = new e_enemy;
+
+			enemy->pos = v2i(map_w / 2+5, map_h / 2);
+			enemy->glyph = 'g';
+			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
+			enemy->type = entity_type::enemy;
+
+			world.entities.emplace_back(enemy);
+		}
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
 		restart = false;
@@ -835,7 +906,7 @@ void game_loop(console& graphics_console, console& text_console)
 			graphics_console.clear();
 			//state independant stuff
 			world.render(graphics_console);
-			player->render_gui(graphics_console, 0, 0);
+			sys.player->render_gui(graphics_console, 0, 0);
 			//state dep. stuff
 			if(sys.gui_state ==gui_state::player_turn)
 			{
@@ -851,19 +922,11 @@ void game_loop(console& graphics_console, console& text_console)
 			}
 			else if (sys.gui_state == gui_state::animating)
 			{
-				if (auto anim = sys.animation.get())
-				{
-					anim->animate_step();
-					if(anim->done_animation())
-					{
-						sys.animation.reset();
-						sys.gui_state = gui_state::player_turn;
-					}
-				}
-				else
-				{
-					sys.gui_state = gui_state::player_turn;
-				}
+				handle_animating(graphics_console, sys);
+			}
+			else if (sys.gui_state == gui_state::enemy_turn)
+			{
+				handle_enemy_turn(graphics_console, sys);
 			}
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);

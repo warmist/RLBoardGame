@@ -34,9 +34,10 @@ struct tile_attr
 enum class entity_type
 {
 	misc,
-	figurine,
+	player,
+	enemy,
 };
-enum_helper_decl(entity_type, misc, figurine);
+enum_helper_decl(entity_type, misc, enemy);
 
 struct entity:public tile_attr
 {
