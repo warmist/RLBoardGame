@@ -97,6 +97,13 @@ v2i get_mouse(console& con)
 	auto p = sf::Mouse::getPosition(con.get_window());
 	p.x /= b.x;
 	p.y /= b.y;
+
+	//TODO: ignore input from OUTSIDE of window. Not sure how to do that though
+	if (p.x < 0)p.x = 0;
+	if (p.x >= view_w)p.x = view_w - 1;
+	if (p.y < 0)p.y = 0;
+	if (p.y >= view_h)p.y = view_h - 1;
+
 	return v2i(p.x,p.y);
 }
 bool get_mouse_left()
@@ -429,7 +436,7 @@ struct card_deck
 	void input(console& c)
 	{
 		auto m = get_mouse(c);
-		
+
 		auto my_rect = get_bounds();
 		if (my_rect.is_inside(m))
 			is_selected = true;
