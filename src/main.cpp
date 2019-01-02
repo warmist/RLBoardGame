@@ -651,8 +651,11 @@ struct enemy_turn_data
 
 	anim_ptr current_animation=nullptr;
 };
+
 struct game_systems
 {
+	std::mt19937 rand;
+
 	e_player* player;
 	map* map;
 	gui_state gui_state = gui_state::player_turn;
@@ -724,7 +727,7 @@ void use_card_actual(card& card, game_systems& g)
 		hand.selected_card = -1;
 		break;
 	case card_fate::draw_pile_bottom:
-		g.deck->cards.insert(g.deck->cards.end, card);
+		g.deck->cards.insert(g.deck->cards.end(), card);
 
 		hand.cards.erase(hand.cards.begin() + hand.selected_card);
 		hand.selected_card = -1;
@@ -817,6 +820,54 @@ card push_card()
 	t_card.desc = "\nAction\nRange     0\nDist.   1D4\n\n\n\nForce a\nmove";
 	t_card.type = card_type::action;
 	return t_card;
+}
+template <typename V>
+void pop_front(V & v)
+{
+	v.erase(v.begin());
+}
+bool draw_card(game_systems& sys)
+{
+	auto& deck = sys.deck->cards;
+	auto& hand = sys.hand->cards;
+	auto& discard = sys.discard->cards;
+	if (deck.size() == 0)
+	{
+		if (discard.size() == 0)
+			return false;
+		else
+		{
+			std::shuffle(discard.begin(), discard.end(),sys.rand);
+			deck.insert(deck.end(), discard.begin(), discard.end());
+			discard.clear();
+		}
+	}
+	auto card = deck.front();
+	pop_front(deck);
+	hand.push_back(card);
+	return true;
+}
+void state_set_to_player(game_systems& sys)
+{
+	auto& hand = sys.hand->cards;
+	auto& discard = sys.discard->cards;
+	auto& wnds = sys.wounds_added->cards;
+	//mix in the wounds
+	discard.insert(discard.end(), wnds.begin(), wnds.end());
+	wnds.clear();
+	//draw new cards
+	const int hand_draw_count = 5;
+	const int hand_max_count = 7;
+	sys.gui_state = gui_state::player_turn;
+	sys.player->current_ap = sys.player->actions_per_turn;
+
+	int draw_count = std::max(std::min(int(hand_max_count- hand.size()),hand_draw_count), 0);
+	for (int i = 0; i < draw_count; i++)
+	{
+		draw_card(sys);
+	}
+	//add generated cards
+	hand.push_back(default_move_action());
 }
 void handle_player_turn(console& con,game_systems& sys)
 {
@@ -972,10 +1023,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 	if (edata.current_enemy_turn >= edata.enemies.size())
 	{
 		sys.e_turn.reset();
-		sys.gui_state = gui_state::player_turn;
-
-		//TODO: put this somewhere global?
-		sys.player->current_ap = sys.player->actions_per_turn;
+		state_set_to_player(sys);
 		return;
 	}
 	if (edata.current_animation)
@@ -1052,7 +1100,10 @@ void game_loop(console& graphics_console, console& text_console)
 	while (window.isOpen())
 	{
 		game_systems sys;
-		
+
+		std::random_device rd;
+		sys.rand.seed(rd());
+
 		state_map states;
 		states.init_default_states();
 
@@ -1078,12 +1129,9 @@ void game_loop(console& graphics_console, console& text_console)
 		sys.deck = &deck;
 		sys.discard = &discard;
 
-		////TEMP HAND FILL
+		////TEMP cards fill
 
-		for(int i=0;i<3;i++)
-			hand.cards.push_back(strike_card());
-
-		hand.cards.push_back(default_move_action());
+		
 		/////////////////////////
 
 
@@ -1128,13 +1176,17 @@ void game_loop(console& graphics_console, console& text_console)
 
 			world.entities.emplace_back(enemy);
 		}
+
+		for (int i = 0; i<15; i++)
+			discard.cards.push_back(strike_card());
+		for (int i = 0; i<8; i++)
+			discard.cards.push_back(push_card());
+		state_set_to_player(sys);
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
 		restart = false;
 		v2i from_click;
 		v2i last_mouse;
-
-		int ticks_to_do = 0;
 
 		while (!restart && window.isOpen())
 		{
@@ -1169,7 +1221,15 @@ void game_loop(console& graphics_console, console& text_console)
 					if (event.key.code == sf::Keyboard::Space)
 					{
 						current_state = states.next_state(current_state);
-						sys.gui_state = gui_state::enemy_turn;
+						if (sys.gui_state == gui_state::player_turn)
+						{
+							//TODO: set_state_enemy
+							sys.gui_state = gui_state::enemy_turn;
+							auto& dis = sys.discard->cards;
+							auto& hand = sys.hand->cards;
+							dis.insert(dis.end(), hand.begin(), hand.end());
+							hand.clear();
+						}
 					}
 					if (event.key.code == sf::Keyboard::S)
 						save_map(world);
