@@ -409,12 +409,41 @@ struct card_deck
 	std::vector<card> cards;
 	int x, y;
 	std::string text;
+	bool is_selected = false;
+	recti get_bounds()
+	{
+		const int w = card::card_w;
+		const int h = card::card_h;
+		recti my_rect(x, y, w, h);
+		if (is_selected)
+		{
+			if (my_rect.pos.x < 0)
+				my_rect.pos.x = 0;
+			else
+			{
+				my_rect.pos.x = view_w - w;
+			}
+		}
+		return my_rect;
+	}
+	void input(console& c)
+	{
+		auto m = get_mouse(c);
+		
+		auto my_rect = get_bounds();
+		if (my_rect.is_inside(m))
+			is_selected = true;
+		else
+			is_selected = false;
+	}
 	void render(console& c)
 	{
 		v3f border_color = v3f(1, 1, 1);
-		const int w = card::card_w;
-		const int h = card::card_h;
-
+		auto my_rect = get_bounds();
+		int x = my_rect.x();
+		int y = my_rect.y();
+		int w = my_rect.width();
+		int h = my_rect.height();
 		for (int i = 0; i < w; i++)
 		{
 			for (int j = 0; j < h; j++)
@@ -872,6 +901,8 @@ void state_set_to_player(game_systems& sys)
 void handle_player_turn(console& con,game_systems& sys)
 {
 	sys.hand->input(con);
+	sys.deck->input(con);
+	sys.discard->input(con);
 	handle_card_use(get_mouse_left(), sys);
 	sys.deck->render(con);
 	sys.discard->render(con);
