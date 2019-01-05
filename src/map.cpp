@@ -223,7 +223,9 @@ void map::render_path(console & trg, const std::vector<v2i>& path, const v3f & c
 
 void map::compact_entities()
 {
-	entities.erase(std::remove_if(entities.begin(), entities.end(), [](const std::unique_ptr<entity>& a) {return !bool(a); }), entities.end());
+	entities.erase(std::remove_if(entities.begin(), entities.end(), [](const std::unique_ptr<entity>& a) {
+		return !bool(a) || a->removed; 
+	}), entities.end());
 }
 bool map::is_passible(int x, int y)
 {

@@ -98,7 +98,7 @@ v2i get_mouse(console& con)
 	p.x /= b.x;
 	p.y /= b.y;
 
-	//TODO: ignore input from OUTSIDE of window. Not sure how to do that though
+	//FIXME: ignore input from OUTSIDE of window. Not sure how to do that though
 	if (p.x < 0)p.x = 0;
 	if (p.x >= view_w)p.x = view_w - 1;
 	if (p.y < 0)p.y = 0;
@@ -676,6 +676,8 @@ struct anim_enemy_damage :public anim
 		if (tween_step == tween_frames - 1)
 		{
 			enemy->current_hp--;
+			if (enemy->current_hp <= 0)
+				enemy->removed = true;
 		}
 	}
 };
@@ -883,8 +885,14 @@ bool draw_card(game_systems& sys)
 	hand.push_back(card);
 	return true;
 }
+void remove_dead_enemies(game_systems& sys)
+{
+	sys.map->compact_entities();
+}
 void state_set_to_player(game_systems& sys)
 {
+	remove_dead_enemies(sys);
+
 	auto& hand = sys.hand->cards;
 	auto& discard = sys.discard->cards;
 	auto& wnds = sys.wounds_added->cards;
@@ -1267,6 +1275,7 @@ void game_loop(console& graphics_console, console& text_console)
 							auto& hand = sys.hand->cards;
 							dis.insert(dis.end(), hand.begin(), hand.end());
 							hand.clear();
+							remove_dead_enemies(sys);
 						}
 					}
 					if (event.key.code == sf::Keyboard::S)
