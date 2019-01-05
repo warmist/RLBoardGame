@@ -189,6 +189,7 @@ enum class gui_state
 	exiting,
 	animating,
 	enemy_turn,
+	lost,
 };
 enum class animation_type
 {
@@ -693,6 +694,7 @@ struct enemy_turn_data
 struct game_systems
 {
 	std::mt19937 rand;
+	bool restart = false;
 
 	e_player* player;
 	map* map;
@@ -889,7 +891,7 @@ void remove_dead_enemies(game_systems& sys)
 {
 	sys.map->compact_entities();
 }
-void state_set_to_player(game_systems& sys)
+void end_enemy_turn(game_systems& sys)
 {
 	remove_dead_enemies(sys);
 
@@ -913,6 +915,25 @@ void state_set_to_player(game_systems& sys)
 	//add generated cards
 	hand.push_back(default_move_action());
 }
+void end_player_turn(game_systems& sys)
+{
+	sys.gui_state = gui_state::enemy_turn;
+	auto& dis = sys.discard->cards;
+	auto& hand = sys.hand->cards;
+	int count_wound = 0;
+	for (auto& c : hand)
+	{
+		if (c.type == card_type::wound)
+			count_wound++;
+	}
+	if (count_wound >= 3)
+	{
+		sys.gui_state = gui_state::lost;
+	}
+	dis.insert(dis.end(), hand.begin(), hand.end());
+	hand.clear();
+	remove_dead_enemies(sys);
+}
 void handle_player_turn(console& con,game_systems& sys)
 {
 	sys.hand->input(con);
@@ -931,6 +952,16 @@ void handle_exiting(console& con, game_systems& sys)
 	if (get_mouse_right())
 	{
 		sys.gui_state = gui_state::player_turn;
+	}
+}
+void handle_lost(console& con, game_systems& sys)
+{
+	int exit_h = view_h / 2;
+	con.set_text_centered(v2i(view_w / 2, exit_h), "You have died!", v3f(0.6f, 0, 0));
+	con.set_text_centered(v2i(view_w / 2, exit_h + 1), "(press esc to exit, anything else - restart)");
+	if (get_mouse_right())
+	{
+		sys.restart = true;
 	}
 }
 void handle_selecting_path(console& con, game_systems& sys)
@@ -1069,7 +1100,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 	if (edata.current_enemy_turn >= edata.enemies.size())
 	{
 		sys.e_turn.reset();
-		state_set_to_player(sys);
+		end_enemy_turn(sys);
 		return;
 	}
 	if (edata.current_animation)
@@ -1141,7 +1172,6 @@ void handle_enemy_turn(console& con, game_systems& sys)
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
-	bool restart = false;
 	float time = 0;
 	while (window.isOpen())
 	{
@@ -1227,14 +1257,14 @@ void game_loop(console& graphics_console, console& text_console)
 			discard.cards.push_back(strike_card());
 		for (int i = 0; i<8; i++)
 			discard.cards.push_back(push_card());
-		state_set_to_player(sys);
+		end_enemy_turn(sys);
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
-		restart = false;
+		sys.restart = false;
 		v2i from_click;
 		v2i last_mouse;
 
-		while (!restart && window.isOpen())
+		while (!sys.restart && window.isOpen())
 		{
 			// Process events
 			sf::Event event;
@@ -1250,7 +1280,7 @@ void game_loop(console& graphics_console, console& text_console)
 					// Escape key: exit
 					if (event.key.code == sf::Keyboard::Escape)
 					{
-						if (sys.gui_state == gui_state::exiting)
+						if (sys.gui_state == gui_state::exiting || sys.gui_state == gui_state::lost)
 							window.close();
 						else if (sys.gui_state == gui_state::player_turn)
 							sys.gui_state = gui_state::exiting;
@@ -1263,19 +1293,17 @@ void game_loop(console& graphics_console, console& text_console)
 						{
 							sys.gui_state = gui_state::player_turn;
 						}
+						else if (sys.gui_state == gui_state::lost)
+						{
+							sys.restart = true;
+						}
 					}
 					if (event.key.code == sf::Keyboard::Space)
 					{
 						current_state = states.next_state(current_state);
 						if (sys.gui_state == gui_state::player_turn)
 						{
-							//TODO: set_state_enemy
-							sys.gui_state = gui_state::enemy_turn;
-							auto& dis = sys.discard->cards;
-							auto& hand = sys.hand->cards;
-							dis.insert(dis.end(), hand.begin(), hand.end());
-							hand.clear();
-							remove_dead_enemies(sys);
+							end_player_turn(sys);
 						}
 					}
 					if (event.key.code == sf::Keyboard::S)
@@ -1311,6 +1339,10 @@ void game_loop(console& graphics_console, console& text_console)
 			else if (sys.gui_state == gui_state::exiting)
 			{
 				handle_exiting(graphics_console, sys);
+			}
+			else if (sys.gui_state == gui_state::lost)
+			{
+				handle_lost(graphics_console, sys);
 			}
 			else if (sys.gui_state == gui_state::selecting_path)
 			{
