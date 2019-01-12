@@ -705,7 +705,6 @@ struct game_systems
 	std::vector<e_enemy*> enemy_choices;
 	//
 	card_hand* hand;
-	card_hand* wounds_added;
 
 	card_deck* deck;
 	card_deck* discard;
@@ -897,10 +896,9 @@ void end_enemy_turn(game_systems& sys)
 
 	auto& hand = sys.hand->cards;
 	auto& discard = sys.discard->cards;
-	auto& wnds = sys.wounds_added->cards;
 	//mix in the wounds
-	discard.insert(discard.end(), wnds.begin(), wnds.end());
-	wnds.clear();
+	discard.insert(discard.end(), hand.begin(), hand.end());
+	hand.clear();
 	//draw new cards
 	const int hand_draw_count = 5;
 	const int hand_max_count = 7;
@@ -1076,7 +1074,7 @@ void handle_animating(console& con, game_systems& sys)
 }
 void handle_enemy_turn(console& con, game_systems& sys)
 {
-	sys.wounds_added->render(con);
+	sys.hand->render(con);
 	const float max_player_distance = 30;
 	if (!sys.e_turn)
 	{
@@ -1150,7 +1148,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		{
 			auto anim = std::make_unique<anim_player_damage>();
 			anim->player = sys.player;
-			anim->player_wound_hand = sys.wounds_added;
+			anim->player_wound_hand = sys.hand;
 			anim->damage_to_do = simulated.dmg;
 			anim->start_animation();
 		
@@ -1187,8 +1185,6 @@ void game_loop(console& graphics_console, console& text_console)
 
 		card_hand hand;
 		hand.hand_gui_y = view_h - 8;
-		card_hand wound_hand;
-		wound_hand.hand_gui_y = view_h - 8;
 
 		card_deck deck;
 		deck.y = view_h - card::card_h - 10;
@@ -1201,7 +1197,6 @@ void game_loop(console& graphics_console, console& text_console)
 		discard.text = "Discard";
 
 		sys.hand = &hand;
-		sys.wounds_added = &wound_hand;
 		sys.deck = &deck;
 		sys.discard = &discard;
 
