@@ -6,6 +6,7 @@
 #include <SFML/Graphics.hpp>
 
 #include "common.hpp"
+#include <cassert>
 /*
 	TODO: 
 		* remove font based rendering
@@ -128,10 +129,63 @@ public:
 	{
 		set_text(center_pos - v2i(int(s.length()) / 2, 0), s, foreground, background);
 	}
+	void set_text_boxed(recti box, const std::string& s, v3f foreground = v3f(1, 1, 1), v3f background = v3f(0, 0, 0))
+	{
+		v2i cur_pos = box.pos;
+		int next_ws = str_find(s, ' ');
+		for(int i=0;i<s.size();i++)
+		{
+			bool no_print = false;
+			if (s[i] == '\n')
+			{
+				cur_pos.y++;
+				cur_pos.x = box.pos.x;
+				no_print = true;
+			}
+			if(!no_print)
+			{
+				//if word fits, put it down
+				int word_size = next_ws - i;
+				int line_space = box.size.x - (cur_pos.x - box.pos.x);
+				if (word_size >= line_space)
+				{
+					//does not fit, newline
+					cur_pos.y++;
+					cur_pos.x = box.pos.x;
+
+				}
+				set_char(cur_pos, s[i], foreground, background);
+				cur_pos.x++;
+				//update next_ws
+				if (next_ws <= i)
+				{
+					int next_non_ws = i;
+					for (next_non_ws = i; next_non_ws < s.size(); next_non_ws++)
+						if (s[next_non_ws] != ' ')
+							break;
+					next_ws = str_find(s, ' ', next_non_ws);
+				}
+			}
+			/*if (word_size >= box.size.x) //word would not fit if it was only one in a line
+			{
+				printf("Word(size %d) does not fit into the box:%d", word_size, box.size.x);
+				current_char++;
+			}*/
+			//check if we still in box
+			int h_space = box.size.y - (cur_pos.y - box.pos.y);
+			if (h_space <= 0)
+			{
+				printf("Could not fit text into the box!");
+				break;
+			}
+		}
+	}
 	v2i get_glypht_size() const
 	{
 		return v2i(int(glypth_bounds_.width), int(glypth_bounds_.height));
 	}
+	void draw_box(recti box, bool double_line = true, v3f foreground = v3f(1, 1, 1), v3f background = v3f(0, 0, 0));
+	
 	/*
     void set_fore(sf::Vector2i pos, sf::Color foreground)
     {

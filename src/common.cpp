@@ -154,4 +154,13 @@ bool angle_inside(int dx, int dy,float angle_start,float angle_end)
         return invert;
     }
 
-};
+}
+int str_find(const std::string & v, char f, int start_offset)
+{
+	for (int i = start_offset; i < v.size(); i++)
+	{
+		if (v[i] == f)
+			return i;
+	}
+	return int(v.size());
+}

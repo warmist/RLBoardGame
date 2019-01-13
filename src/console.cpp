@@ -47,6 +47,40 @@ console::console(int w, int h, font_descriptor data,float scale) :w_(w),h_(h),fo
 	back_.resize(w,h);
 }
 
+void console::draw_box(recti box, bool double_line, v3f foreground, v3f background)
+{
+	int w = box.width();
+	int h = box.height();
+	int x = box.x();
+	int y = box.y();
+
+	int hl = (double_line) ? (tile_hline_double) : (tile_hline_single);
+	int vl = (double_line) ? (tile_vline_double) : (tile_vline_single);
+	for (int i = 0; i < w; i++)
+	{
+		for (int j = 0; j < h; j++)
+		{
+			set_char(v2i(i + x, j + y), ' ', foreground, background);
+		}
+	}
+
+	for (int i = 0; i < w; i++)
+	{
+		set_char(v2i(x + i, y), hl, foreground, background);
+		set_char(v2i(x + i, y + h - 1), hl, foreground, background);
+	}
+	for (int i = 0; i < h; i++)
+	{
+		set_char(v2i(x, y + i), vl, foreground, background);
+		set_char(v2i(x + w - 1, y + i), vl, foreground, background);
+	}
+
+	set_char(v2i(x, y), (double_line) ? (tile_es_corner_double) : (tile_es_corner_single), foreground, background);
+	set_char(v2i(x + w - 1, y), (double_line) ? (tile_ws_corner_double) : (tile_ws_corner_single), foreground, background);
+	set_char(v2i(x, y + h - 1), (double_line) ? (tile_ne_corner_double) : (tile_ne_corner_single), foreground, background);
+	set_char(v2i(x + w - 1, y + h - 1), (double_line) ? (tile_wn_corner_double) : (tile_wn_corner_single), foreground, background);
+}
+
 void console::render()
 {
 	sf::RenderWindow* w = &window_;

@@ -374,28 +374,7 @@ struct card
 		const int w = card_w;
 		const int h = card_h;
 
-		for (int i = 0; i < w; i++)
-		{
-			for (int j = 0; j < h; j++)
-			{
-				c.set_char(v2i(i + x, j + y), ' ');
-			}
-		}
-
-		for (int i = 0; i < w; i++)
-		{
-			c.set_char(v2i(x + i, y), tile_hline_double, border_color);
-			c.set_char(v2i(x + i, y + h - 1), tile_hline_double, border_color);
-		}
-		for (int i = 0; i < h; i++)
-		{
-			c.set_char(v2i(x, y + i), tile_vline_double, border_color);
-			c.set_char(v2i(x + w - 1, y + i), tile_vline_double, border_color);
-		}
-		c.set_char(v2i(x, y), tile_es_corner_double, border_color);
-		c.set_char(v2i(x + w - 1, y), tile_ws_corner_double, border_color);
-		c.set_char(v2i(x, y + h - 1), tile_ne_corner_double, border_color);
-		c.set_char(v2i(x + w - 1, y + h - 1), tile_wn_corner_double, border_color);
+		c.draw_box(recti(x, y, w, h),true,border_color);
 
 		const int text_start = int(w / 2 - name.length() / 2);
 		c.set_text(v2i(x + text_start, y), name);
@@ -409,7 +388,7 @@ struct card
 				c.set_char(v2i(x + card::card_w - cost_ap+i-2, cur_y), (unsigned char)'\xad',get_ap_color());
 			cur_y++;
 		}
-		c.set_text(v2i(x + 2, cur_y), desc);
+		c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y-y) - 1), desc);
 	}
 };
 struct card_deck
@@ -452,31 +431,8 @@ struct card_deck
 		int y = my_rect.y();
 		int w = my_rect.width();
 		int h = my_rect.height();
-		for (int i = 0; i < w; i++)
-		{
-			for (int j = 0; j < h; j++)
-			{
-				c.set_char(v2i(i + x, j + y), ' ');
-			}
-		}
+		c.draw_box(recti(x, y, w, h), true, border_color);
 
-		for (int i = 0; i < w; i++)
-		{
-			c.set_char(v2i(x + i, y), tile_hline_double, border_color);
-			c.set_char(v2i(x + i, y + h - 1), tile_hline_double, border_color);
-		}
-		for (int i = 0; i < h; i++)
-		{
-			c.set_char(v2i(x, y + i), tile_vline_double, border_color);
-			c.set_char(v2i(x + w - 1, y + i), tile_vline_double, border_color);
-		}
-		c.set_char(v2i(x, y), tile_es_corner_double, border_color);
-		c.set_char(v2i(x + w - 1, y), tile_ws_corner_double, border_color);
-		c.set_char(v2i(x, y + h - 1), tile_ne_corner_double, border_color);
-		c.set_char(v2i(x + w - 1, y + h - 1), tile_wn_corner_double, border_color);
-
-		
-		
 		const int text_start = int(w / 2 - text.length() / 2);
 		
 		c.set_text(v2i(x + text_start, y), text);
@@ -567,7 +523,7 @@ card wound_card()
 {
 	card t_card;
 	t_card.name = "Wound";
-	t_card.desc = "Loose game\nif 3 are\nin hand";
+	t_card.desc = "Loose game if 3 are in hand";
 	t_card.type = card_type::wound;
 	return t_card;
 }
@@ -726,7 +682,7 @@ card default_move_action()
 	card ret;
 	ret.name = "Run";
 	ret.cost_ap = 1;
-	ret.desc = "Move\nRange      5\n\n\n\nRun to\nthe target";
+	ret.desc = "Move Range      5 Run to the target";
 	ret.type = card_type::generated;
 	ret.needs.type = card_needs::walkable_path;
 	ret.needs.distance = 5;
@@ -843,7 +799,7 @@ card strike_card()
 	card t_card;
 	t_card.name = "Strike";
 	t_card.cost_ap = 2;
-	t_card.desc = "\nAttack\nRange     0\nDmg     1D6\n\n\n\nPerform an\nattack with\na very big\nsword";
+	t_card.desc = "\nAttack\nRange 0\nDmg 1D6\n\n\n\nPerform an attack with a very big sword";
 	t_card.type = card_type::action;
 	t_card.use_callback = strike_action;
 	t_card.needs.distance = 2;
@@ -856,7 +812,7 @@ card push_card()
 	card t_card;
 	t_card.name = "Push";
 	t_card.cost_ap = 1;
-	t_card.desc = "\nAction\nRange     0\nDist.   1D4\n\n\n\nForce a\nmove";
+	t_card.desc = "\nAction\nRange 0\nDist. 1D4\n\n\n\nForce a move";
 	t_card.type = card_type::action;
 	return t_card;
 }
@@ -1355,6 +1311,7 @@ void game_loop(console& graphics_console, console& text_console)
 			{
 				handle_enemy_turn(graphics_console, sys);
 			}
+			
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 			//draw_asciimap(graphics_console);
 			//if (&text_console != &graphics_console)

@@ -728,3 +728,5 @@ bool read_file(const char* fname,std::vector<T>& ret)
 	fclose(f);
 	return ok;
 }
+
+int str_find(const std::string& v, char f, int start_offset = 0);
