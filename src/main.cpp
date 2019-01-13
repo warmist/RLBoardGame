@@ -423,6 +423,16 @@ struct card_deck
 		else
 			is_selected = false;
 	}
+	int count_wounds()
+	{
+		int ret = 0;
+		for (auto& c : cards)
+		{
+			if (c.type == card_type::wound)
+				ret++;
+		}
+		return ret;
+	}
 	void render(console& c)
 	{
 		v3f border_color = v3f(1, 1, 1);
@@ -439,15 +449,24 @@ struct card_deck
 		c.set_char(v2i(x + text_start + int(text.length()), y), tile_nse_t_double, border_color);
 		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
 
+		int wounds = count_wounds();
+
+		const int buffer_size = 12;
+		char buffer[buffer_size];
+
+		const v3f wound_color=  { 0.76f, 0.04f, 0.01f };
+		const int wound_y = y+card::card_h - 2;
+		snprintf(buffer, buffer_size, "Wounds :%3d", (wounds>999) ? (999) : (wounds));
+
+		c.set_text(v2i(x + 2, wound_y), buffer, wound_color);
+		c.set_char(v2i(x + 2 + buffer_size - 1, wound_y), tile_ws_corner_double, wound_color);
+		c.set_char(v2i(x + 2 - 1, wound_y), tile_es_corner_double, wound_color);
 
 		const int count_y = y+card::card_h-1;
-		const int buffer_size = 10;
-		char buffer[buffer_size];
-		snprintf(buffer, buffer_size, "Count:%3d", (cards.size()>999)?(999):((int)cards.size()));
-		
-		c.set_text(v2i(x + 3, count_y), buffer);
-		c.set_char(v2i(x + 3 + buffer_size-1, count_y), tile_nse_t_double, border_color);
-		c.set_char(v2i(x + 3 - 1, count_y), tile_nsw_t_double, border_color);
+		snprintf(buffer, buffer_size, "Count  :%3d", (cards.size()>999)?(999):((int)cards.size()));
+		c.set_text(v2i(x + 2, count_y), buffer);
+		c.set_char(v2i(x + 2 + buffer_size-1, count_y), tile_nse_t_double, border_color);
+		c.set_char(v2i(x + 2 - 1, count_y), tile_nsw_t_double, border_color);
 	}
 };
 struct card_hand
