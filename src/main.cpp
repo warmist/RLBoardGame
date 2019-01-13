@@ -807,7 +807,7 @@ void strike_action(card&,game_systems& g, card_needs_output* needs)
 {
 	auto anim = std::make_unique<anim_enemy_damage>();
 	anim->enemy = static_cast<e_enemy*>(needs->visible_target_unit);
-	anim->damage_to_do = rand() % 6 + 1;
+	anim->damage_to_do = 3;
 
 	g.animation = std::move(anim);
 	g.animation->start_animation();
@@ -818,12 +818,32 @@ card strike_card()
 	card t_card;
 	t_card.name = "Strike";
 	t_card.cost_ap = 2;
-	t_card.desc = "\nAttack\nRange 0\nDmg 1D6\n\n\n\nPerform an attack with a very big sword";
+	t_card.desc = "\nAttack\nRange 0\nDmg 3\n\n\n\nPerform an attack with a very big sword";
 	t_card.type = card_type::action;
 	t_card.use_callback = strike_action;
 	t_card.needs.distance = 2;
 	t_card.needs.type = card_needs::visible_target_unit;
 	return t_card;
+}
+void push_action(card&, game_systems& g, card_needs_output* needs)
+{
+	const int move_dist = 3;
+	auto anim = std::make_unique<anim_unit_walk>();
+	auto enemy = static_cast<e_enemy*>(needs->visible_target_unit);
+	anim->walker = enemy;
+	auto& p = anim->path;
+	auto dir = enemy->pos - g.player->pos;
+	auto cpos = enemy->pos;
+	for (int i = 0; i < move_dist; i++)
+	{
+		cpos += dir;
+		if (!g.map->is_passible(cpos.x, cpos.y))
+			break;
+		p.push_back(cpos);
+	}
+	g.animation = std::move(anim);
+	g.animation->start_animation();
+	g.gui_state = gui_state::animating;
 }
 card push_card()
 {
@@ -831,8 +851,11 @@ card push_card()
 	card t_card;
 	t_card.name = "Push";
 	t_card.cost_ap = 1;
-	t_card.desc = "\nAction\nRange 0\nDist. 1D4\n\n\n\nForce a move";
+	t_card.desc = "\nAction\nRange 0\nDist. 3\n\n\n\nForce a move";
 	t_card.type = card_type::action;
+	t_card.needs.type = card_needs::visible_target_unit;
+	t_card.needs.distance = 2;
+	t_card.use_callback = push_action;
 	return t_card;
 }
 template <typename V>
