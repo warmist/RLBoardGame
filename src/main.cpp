@@ -607,8 +607,8 @@ public:
 };
 struct e_enemy :public entity
 {
-	int current_hp=5;
-	int max_hp=5;
+	int current_hp=3;
+	int max_hp=3;
 
 	int move = 3;
 	int dmg = 1;
