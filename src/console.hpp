@@ -132,7 +132,7 @@ public:
 	void set_text_boxed(recti box, const std::string& s, v3f foreground = v3f(1, 1, 1), v3f background = v3f(0, 0, 0))
 	{
 		v2i cur_pos = box.pos;
-		int next_ws = str_find(s, ' ');
+		int next_ws = std::min(str_find(s, ' '), str_find(s, '\n'));
 		for(int i=0;i<s.size();i++)
 		{
 			bool no_print = false;
@@ -163,7 +163,7 @@ public:
 					for (next_non_ws = i; next_non_ws < s.size(); next_non_ws++)
 						if (s[next_non_ws] != ' ')
 							break;
-					next_ws = str_find(s, ' ', next_non_ws);
+					next_ws = std::min(str_find(s, ' ', next_non_ws), str_find(s, '\n', next_non_ws));
 				}
 			}
 			/*if (word_size >= box.size.x) //word would not fit if it was only one in a line

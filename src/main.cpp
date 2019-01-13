@@ -682,7 +682,7 @@ card default_move_action()
 	card ret;
 	ret.name = "Run";
 	ret.cost_ap = 1;
-	ret.desc = "Move Range      5 Run to the target";
+	ret.desc = "\nMove\nRange 5\n\n\nRun to the target";
 	ret.type = card_type::generated;
 	ret.needs.type = card_needs::walkable_path;
 	ret.needs.distance = 5;
