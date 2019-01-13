@@ -75,8 +75,6 @@ struct map
     inline bool is_valid_coord(int x, int y) const { return x >= 0 && y >= 0 && x < static_layer.w && y < static_layer.h; }
 	inline bool is_valid_coord(v2i p) const { return p.x >= 0 && p.y >= 0 && p.x < static_layer.w && p.y < static_layer.h; }
     bool is_passible(int x, int y);
-    bool is_supported_all(int x, int y, int dirmask); //returns true IFF all (x+dx,y+dy) is not passible (checking con8 with dirmask)
-    bool is_supported_any(int x, int y, int dirmask); //returns true IFF any (x+dx,y+dy) is not passible (checking con8 with dirmask)
 
 	void save(FILE* f);
 	void load(FILE* f);

@@ -158,11 +158,6 @@ std::vector<v2i> map::get_path(v2i target,int max_len)
 
 	std::vector<v2i> ret;
 	float cur_dist = pfr(target);
-	if ((cur_dist == 0) || (cur_dist == path_blocked))
-	{
-		
-		return ret;
-	}
 
 	while (true)
 	{
@@ -188,7 +183,6 @@ std::vector<v2i> map::get_path(v2i target,int max_len)
 		}
 		if (cdelta == v2i(0, 0))
 		{
-			assert(false);
 			return std::vector<v2i>();
 		}
 		ret.push_back(target);
@@ -231,48 +225,14 @@ bool map::is_passible(int x, int y)
 {
     if (test(static_layer(x, y).flags,tile_flags::block_move))
         return false;
-    /*auto& e = entities(x, y);
-    if (e && test(e->flags, item_flags::blocks_move))
-        return false;*/
+	for (auto& e : entities)
+	{
+		if (e->pos == v2i(x, y))
+		{
+			return false;
+		}
+	}
     return true;
-}
-bool map::is_supported_all(int x, int y, int dirmask)
-{
-    for (int i = 0; i < 8; i++)
-    {
-        if(dirmask & (1u<<i))
-        { 
-            int tx = x+con8_dx[i];
-            int ty = y+con8_dy[i];
-            if (tx >= 0 && ty >= 0 && tx < static_layer.w && ty < static_layer.h)
-            {
-                if (is_passible(tx, ty))
-                {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
-}
-bool map::is_supported_any(int x, int y, int dirmask)
-{
-    for (int i = 0; i < 8; i++)
-    {
-        if (dirmask & (1u << i))
-        {
-            int tx = x + con8_dx[i];
-            int ty = y + con8_dy[i];
-            if (tx >= 0 && ty >= 0 && tx < static_layer.w && ty < static_layer.h)
-            {
-                if (!is_passible(tx, ty))
-                {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
 }
 
 void map::save(FILE * f)
