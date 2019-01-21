@@ -75,3 +75,8 @@ struct card
 	v3f get_ap_color();
 	void render(console& c, int x, int y);
 };
+
+#include <unordered_map>
+using lua_booster = std::unordered_map<std::string, card>;
+struct lua_State;
+void lua_load_booster(lua_State* L,int arg,lua_booster& output);

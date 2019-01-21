@@ -1038,7 +1038,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 void init_lua(game_systems& sys)
 {
 	luaL_openlibs(sys.L);
-	string path = asset_path + "/deck_starter.lua";
+	string path = asset_path + "/booster_starter.lua";
 	luaL_dofile(sys.L, path.c_str());
 }
 void game_loop(console& graphics_console, console& text_console)

@@ -67,3 +67,10 @@ void card::render(console & c, int x, int y)
 	}
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc);
 }
+
+#include "lua.hpp"
+
+void lua_load_booster(lua_State * L,int arg,lua_booster& output)
+{
+	
+}
