@@ -1,6 +1,7 @@
 
 #include "common.hpp"
 #include "console.hpp"
+#include "lua.hpp"
 
 #include "map.hpp"
 #include <unordered_set>
@@ -15,6 +16,7 @@
 #include <array>
 
 using std::string;
+string asset_path;
 //900/12=85
 const int map_w = 200;
 const int map_h = 200;
@@ -685,6 +687,8 @@ struct game_systems
 	card_deck* discard;
 
 	card_needs_output needs_out;
+
+	lua_State* L = nullptr;
 };
 void act_move(card& c, game_systems& g, card_needs_output* nd)
 {
@@ -1165,6 +1169,12 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		edata.current_enemy_changed = true;
 	}
 }
+void init_lua(game_systems& sys)
+{
+	luaL_openlibs(sys.L);
+	string path = asset_path + "/deck_starter.lua";
+	luaL_dofile(sys.L, path.c_str());
+}
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -1172,6 +1182,9 @@ void game_loop(console& graphics_console, console& text_console)
 	while (window.isOpen())
 	{
 		game_systems sys;
+		//TODO: defer lua_close
+		sys.L = luaL_newstate();
+		init_lua(sys);
 
 		std::random_device rd;
 		sys.rand.seed(rd());
@@ -1363,6 +1376,7 @@ void game_loop(console& graphics_console, console& text_console)
 
 			window.display();
 		}
+		lua_close(sys.L);
 	}
 }
 
@@ -1370,6 +1384,10 @@ void game_loop(console& graphics_console, console& text_console)
 
 int main(int argc,char **argv)
 {
+	if (argc > 1)
+	{
+		asset_path = argv[1];
+	}
     console text_console(view_w, view_h, font_descriptor(reinterpret_cast<const unsigned char*>(EMB_FILE_Paul_10x10), EMB_FILE_SIZE_Paul_10x10, 10, 10));
 	console& graphics_console = text_console;
 	//console graphics_console(&text_console,(view_w /10)*12, (view_h / 10) * 12, font_descriptor(reinterpret_cast<const unsigned char*>(EMB_FILE_cp437_12x12), EMB_FILE_SIZE_cp437_12x12, 12, 12));
