@@ -555,6 +555,7 @@ struct game_systems
 	card_needs_output needs_out;
 
 	lua_State* L = nullptr;
+	lua_booster possible_cards;
 };
 void act_move(card& c, game_systems& g, card_needs_output* nd)
 {
@@ -1040,6 +1041,7 @@ void init_lua(game_systems& sys)
 	luaL_openlibs(sys.L);
 	string path = asset_path + "/booster_starter.lua";
 	luaL_dofile(sys.L, path.c_str());
+	lua_load_booster(sys.L,1, sys.possible_cards);
 }
 void game_loop(console& graphics_console, console& text_console)
 {

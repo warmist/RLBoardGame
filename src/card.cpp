@@ -1,6 +1,7 @@
 #include "card.hpp"
 #include "console.hpp"
 
+constexpr float phi = 1.61803398874989484820f;
 float tween_warn(float t)
 {
 	if (t < 0.4)
@@ -67,10 +68,38 @@ void card::render(console & c, int x, int y)
 	}
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc);
 }
-
+void card::use(game_systems& g, card_needs_output* out)
+{
+	//push lua table with this cards "data"
+	//push lua table with global systems
+	//push required data from needs output
+}
 #include "lua.hpp"
-
+void lua_load_card(lua_State* L, int arg, card& output)
+{
+	lua_getfield(L, arg, "name");
+	output.name = lua_tostring(L, -1);
+	lua_getfield(L, arg, "description");
+	output.desc = lua_tostring(L, -1);
+	lua_getfield(L, arg, "cost");
+	output.cost_ap = luaL_optinteger(L, -1, 0);
+	lua_getfield(L, arg, "use");
+	output.lua_func_use_ref = luaL_ref(L, -1); //FIXME:!!!!!!!!!! WHEN TO UNREF??? !!!!!!!!!!!
+	//TODO: read tags
+}
 void lua_load_booster(lua_State * L,int arg,lua_booster& output)
 {
-	
+	lua_pushvalue(L, arg);
+	lua_pushnil(L);
+	while (lua_next(L, -2))
+	{
+		lua_pushvalue(L, -2); //copy key
+		const char *key = lua_tostring(L, -1);
+		
+		card tmp;
+		lua_load_card(L, -2, tmp);
+		lua_pop(L, 2);//pop key copy and value
+		
+	}
+	lua_pop(L, 1);
 }

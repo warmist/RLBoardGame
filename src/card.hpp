@@ -35,11 +35,9 @@ struct card_needs_input
 	card_needs type = card_needs::nothing;
 	float distance;
 };
-struct card;
 struct game_systems;
-using card_action = void(*)(card&, game_systems&, card_needs_output*);
 struct console;
-constexpr float phi = 1.61803398874989484820f;
+
 struct card
 {
 	std::string name;
@@ -64,7 +62,8 @@ struct card
 	int cost_ap = 0;
 	card_needs_input needs;
 	//USE
-	card_action use_callback = nullptr;
+	int lua_func_use_ref = -2;//LUA_NOREF
+	void use(game_systems& g, card_needs_output* out);
 	//POST_USE
 	card_fate after_use = card_fate::destroy;
 
