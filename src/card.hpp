@@ -35,11 +35,11 @@ struct card_needs_input
 	card_needs type = card_needs::nothing;
 	float distance;
 };
-struct game_systems;
 struct console;
-
+struct lua_State;
 struct card
 {
+	std::string key;
 	std::string name;
 	std::string desc;
 	static const int card_w = 15;
@@ -63,7 +63,7 @@ struct card
 	card_needs_input needs;
 	//USE
 	int lua_func_use_ref = -2;//LUA_NOREF
-	void use(game_systems& g, card_needs_output* out);
+	void use(lua_State* L, card_needs_output* out);
 	//POST_USE
 	card_fate after_use = card_fate::destroy;
 
@@ -77,5 +77,5 @@ struct card
 
 #include <unordered_map>
 using lua_booster = std::unordered_map<std::string, card>;
-struct lua_State;
+
 void lua_load_booster(lua_State* L,int arg,lua_booster& output);
