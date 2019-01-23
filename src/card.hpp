@@ -64,7 +64,7 @@ struct card
 	card_needs_input needs;
 	//USE
 	//actual function is in lua
-	void use(lua_State* L, card_needs_output* out);
+	lua_State* yieldable_use(lua_State* L, card_needs_output* out);
 	//POST_USE
 	card_fate after_use = card_fate::destroy;
 

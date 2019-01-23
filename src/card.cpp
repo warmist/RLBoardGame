@@ -89,7 +89,7 @@ void lua_push_needs(lua_State* L, card* c, card_needs_output* data)
 		break;
 	}
 }
-void card::use(lua_State* L, card_needs_output* out)
+lua_State* card::yieldable_use(lua_State* L, card_needs_output* out)
 {
 	//start a lua coroutine. 
 	//This then can get yielded a few times until the effects are all "animated"
@@ -101,7 +101,7 @@ void card::use(lua_State* L, card_needs_output* out)
 	lua_getfield(L, -1, "use");
 	if (!lua_isfunction(L, -1))
 	{
-		return;
+		return nullptr;
 	}
 	lua_pushvalue(L, card_data_pos); //copy card data (i.e. card class?)
 	//TODO: sort of card class, not actual card data here :|
@@ -112,14 +112,11 @@ void card::use(lua_State* L, card_needs_output* out)
 	
 	//push required data from needs output
 	lua_push_needs(L,this, out);
+	auto L1 = lua_newthread(L);
+	lua_insert(L, lua_gettop(L) - 4); //move thread under args+function
+	lua_xmove(L, L1, 4); //transfer everything needed for the fcall
 	print_stack(L);
-	//call the function
-	auto ret = lua_pcall(L, 3, LUA_MULTRET,0);
-	if (ret != 0)
-	{
-		printf("Error:%s\n", lua_tostring(L, -1));
-		assert(false);\
-	}
+	return L1;
 }
 
 void lua_load_card(lua_State* L, int arg, card& output)

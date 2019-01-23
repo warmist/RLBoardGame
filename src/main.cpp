@@ -555,6 +555,8 @@ struct game_systems
 	card_needs_output needs_out;
 
 	lua_State* L = nullptr;
+	lua_State* yielded_L = nullptr;
+	int coroutine_ref = LUA_NOREF;
 	lua_booster possible_cards;
 };
 void act_move(card& c, game_systems& g, card_needs_output* nd)
@@ -567,48 +569,38 @@ void act_move(card& c, game_systems& g, card_needs_output* nd)
 	g.animation->start_animation();
 	g.gui_state = gui_state::animating;
 }
-
+void done_yielded_lua(game_systems& sys);
+void check_for_yielded_lua(game_systems& sys, int args_pushed = 0)
+{
+	if (!sys.yielded_L)
+	{
+		//not got here with animation not from lua?
+		done_yielded_lua(sys);
+		return;
+	}
+	print_stack(sys.yielded_L);
+	auto result = lua_resume(sys.yielded_L, args_pushed);
+	if (result == 0)
+	{
+		//all done running state from lua return to normal working
+		done_yielded_lua(sys);
+		return;
+	}
+	else if (result != LUA_YIELD)
+	{
+		printf("Error:%s\n", lua_tostring(sys.yielded_L, -1));
+		assert(false);
+	}
+}
 void use_card_actual(card& card, game_systems& g)
 {
 	auto& hand = *g.hand;
 	g.player->current_ap -= card.cost_ap;
-	card.use(g.L, &g.needs_out);
-	auto ret = card.after_use;
-	switch (ret)
-	{
-	case card_fate::destroy:
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::discard:
-		g.discard->cards.push_back(card);
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::hand:
-		//do nothing?
-		break;
-	case card_fate::draw_pile_top:
-		g.deck->cards.insert(g.deck->cards.begin(), card);
 
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::draw_pile_rand:
-		g.deck->cards.insert(g.deck->cards.begin()+rand()%g.deck->cards.size(), card);
+	g.yielded_L = card.yieldable_use(g.L, &g.needs_out);
+	g.coroutine_ref=luaL_ref(g.L, -1);
 
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::draw_pile_bottom:
-		g.deck->cards.insert(g.deck->cards.end(), card);
-
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	default:
-		break;
-	}
+	check_for_yielded_lua(g,3);
 }
 void fill_enemy_choices(v2i center, float distance,map& m, std::vector<e_enemy*>& enemies)
 {
@@ -887,6 +879,61 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 		sys.gui_state = gui_state::player_turn;
 	}
 }
+void done_yielded_lua(game_systems& sys)
+{
+	sys.gui_state = gui_state::player_turn;
+	if (sys.yielded_L)
+	{
+		sys.yielded_L = nullptr;
+		
+	}
+
+	auto& hand = *sys.hand;
+	auto id = hand.selected_card;
+	if (id == -1 || id >= hand.cards.size())
+	{
+		assert(false);
+	}
+	auto& card = hand.cards[id];
+
+	auto ret = card.after_use;
+	switch (ret)
+	{
+	case card_fate::destroy:
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
+		break;
+	case card_fate::discard:
+		sys.discard->cards.push_back(card);
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
+		break;
+	case card_fate::hand:
+		//do nothing?
+		break;
+	case card_fate::draw_pile_top:
+		sys.deck->cards.insert(sys.deck->cards.begin(), card);
+
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
+		break;
+	case card_fate::draw_pile_rand:
+		sys.deck->cards.insert(sys.deck->cards.begin() + rand() % sys.deck->cards.size(), card);
+
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
+		break;
+	case card_fate::draw_pile_bottom:
+		sys.deck->cards.insert(sys.deck->cards.end(), card);
+
+		hand.cards.erase(hand.cards.begin() + hand.selected_card);
+		hand.selected_card = -1;
+		break;
+	default:
+		break;
+	}
+}
+
 void handle_animating(console& con, game_systems& sys)
 {
 	if (auto anim = sys.animation.get())
@@ -895,7 +942,8 @@ void handle_animating(console& con, game_systems& sys)
 		if (anim->done_animation())
 		{
 			sys.animation.reset();
-			sys.gui_state = gui_state::player_turn;
+			//int args_from_anim = anim->push_lua_args();
+			check_for_yielded_lua(sys);
 		}
 	}
 	else
@@ -1001,12 +1049,50 @@ void handle_enemy_turn(console& con, game_systems& sys)
 int lua_sys_damage(lua_State* L)
 {
 	printf("Called damage!\n");
-	return 0;
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	luaL_checktype(L, 1, 1);
+	auto enemy = reinterpret_cast<entity*>(lua_touserdata(L, 1));
+	int damage = luaL_checkint(L, 2);
+	if (enemy->type == entity_type::enemy)
+	{
+		auto anim = std::make_unique<anim_enemy_damage>();
+		anim->enemy = static_cast<e_enemy*>(enemy);
+		anim->damage_to_do = damage;
+
+		sys.animation = std::move(anim);
+		sys.animation->start_animation();
+		sys.gui_state = gui_state::animating;
+	}
+	else
+	{
+		luaL_error(L, "Invalid entity type. Expected e_enemy.");
+	}
+	return lua_yield(L,0);
 }
 int lua_sys_move(lua_State* L)
 {
 	printf("Called move!\n");
-	return 0;
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	luaL_checktype(L, 1, 1);
+	auto mover = reinterpret_cast<entity*>(lua_touserdata(L, 1));
+	//get path
+	//make animation
+	/*int damage = luaL_checkint(L, 2);
+	if (enemy->type == entity_type::enemy)
+	{
+		auto anim = std::make_unique<anim_unit_walk>();
+		anim->path = nd->walkable_path;
+		std::reverse(anim->path.begin(), anim->path.end());
+		anim->walker = g.player;
+		g.animation = std::move(anim);
+		g.animation->start_animation();
+		g.gui_state = gui_state::animating;
+	}
+	else
+	{
+		luaL_error(L, "Invalid entity type. Expected e_enemy.");
+	}*/
+	return lua_yield(L, 0);
 }
 void init_lua_system(game_systems& sys)
 {
