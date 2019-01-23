@@ -1,7 +1,7 @@
 
 #include "common.hpp"
 #include "console.hpp"
-#include "lua.hpp"
+#include "lua_helper.hpp"
 
 #include "map.hpp"
 #include <unordered_set>
@@ -567,23 +567,12 @@ void act_move(card& c, game_systems& g, card_needs_output* nd)
 	g.animation->start_animation();
 	g.gui_state = gui_state::animating;
 }
-card default_move_action()
-{
-	card ret;
-	ret.name = "Run";
-	ret.cost_ap = 1;
-	ret.desc = "\nMove\nRange 5\n\n\nRun to the target";
-	ret.type = card_type::generated;
-	ret.needs.type = card_needs::walkable_path;
-	ret.needs.distance = 5;
-	ret.use_callback = &act_move;
-	return ret;
-}
+
 void use_card_actual(card& card, game_systems& g)
 {
 	auto& hand = *g.hand;
 	g.player->current_ap -= card.cost_ap;
-	card.use_callback(card, g, &g.needs_out);
+	card.use(g.L, &g.needs_out);
 	auto ret = card.after_use;
 	switch (ret)
 	{
@@ -668,10 +657,7 @@ void handle_card_use(bool click,game_systems& g)
 			
 			return;
 		}
-		if (card.use_callback)
-		{
-			use_card_actual(card, g);
-		}
+		use_card_actual(card, g);
 	}
 }
 void strike_action(card&,game_systems& g, card_needs_output* needs)
@@ -683,18 +669,6 @@ void strike_action(card&,game_systems& g, card_needs_output* needs)
 	g.animation = std::move(anim);
 	g.animation->start_animation();
 	g.gui_state = gui_state::animating;
-}
-card strike_card()
-{
-	card t_card;
-	t_card.name = "Strike";
-	t_card.cost_ap = 2;
-	t_card.desc = "\nAttack\nRange 0\nDmg 3\n\n\n\nPerform an attack with a very big sword";
-	t_card.type = card_type::action;
-	t_card.use_callback = strike_action;
-	t_card.needs.distance = 2;
-	t_card.needs.type = card_needs::visible_target_unit;
-	return t_card;
 }
 void push_action(card&, game_systems& g, card_needs_output* needs)
 {
@@ -715,19 +689,6 @@ void push_action(card&, game_systems& g, card_needs_output* needs)
 	g.animation = std::move(anim);
 	g.animation->start_animation();
 	g.gui_state = gui_state::animating;
-}
-card push_card()
-{
-	//TODO: unfinished
-	card t_card;
-	t_card.name = "Push";
-	t_card.cost_ap = 1;
-	t_card.desc = "\nAction\nRange 0\nDist. 3\n\n\n\nForce a move";
-	t_card.type = card_type::action;
-	t_card.needs.type = card_needs::visible_target_unit;
-	t_card.needs.distance = 2;
-	t_card.use_callback = push_action;
-	return t_card;
 }
 template <typename V>
 void pop_front(V & v)
@@ -780,7 +741,8 @@ void end_enemy_turn(game_systems& sys)
 		draw_card(sys);
 	}
 	//add generated cards
-	hand.push_back(default_move_action());
+
+	hand.push_back(sys.possible_cards["move"]);
 }
 void end_player_turn(game_systems& sys)
 {
@@ -1036,11 +998,71 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		edata.current_enemy_changed = true;
 	}
 }
+int lua_sys_damage(lua_State* L)
+{
+	printf("Called damage!\n");
+	return 0;
+}
+int lua_sys_move(lua_State* L)
+{
+	printf("Called move!\n");
+	return 0;
+}
+void init_lua_system(game_systems& sys)
+{
+	auto L = sys.L;
+	lua_getregistry(L);
+	lua_newtable(L);
+
+	lua_pushlightuserdata(L, &sys);
+	lua_pushcclosure(L, lua_sys_damage,1);
+	lua_setfield(L, -2, "damage");
+
+	lua_pushlightuserdata(L, &sys);
+	lua_pushcclosure(L, lua_sys_move, 1);
+	lua_setfield(L, -2, "move");
+
+	lua_setfield(L, -2, "system");
+
+	lua_newtable(L);
+	lua_setfield(L, -2, "cards");
+
+	lua_pop(L, 1);
+}
+static int wrap_exceptions(lua_State *L, lua_CFunction f)
+{
+	try {
+		return f(L);  // Call wrapped function and return result.
+	}
+	catch (const char *s) {  // Catch and convert exceptions.
+		lua_pushstring(L, s);
+	}
+	catch (std::exception& e) {
+		lua_pushstring(L, e.what());
+	}
+	catch (...) {
+		lua_pushliteral(L, "caught (...)");
+	}
+	return lua_error(L);  // Rethrow as a Lua error.
+}
 void init_lua(game_systems& sys)
 {
+	lua_stack_guard g(sys.L);
 	luaL_openlibs(sys.L);
+
+	lua_pushlightuserdata(sys.L, (void *)wrap_exceptions);
+	luaJIT_setmode(sys.L, -1, LUAJIT_MODE_WRAPCFUNC | LUAJIT_MODE_ON);
+	lua_pop(sys.L, 1);
+
+	init_lua_system(sys);
+	
 	string path = asset_path + "/booster_starter.lua";
-	luaL_dofile(sys.L, path.c_str());
+	auto ret=luaL_dofile(sys.L, path.c_str());
+	if (ret != 0)
+	{
+		printf("Error:%s\n", lua_tostring(sys.L, -1));
+		assert(false);
+	}
 	lua_load_booster(sys.L,1, sys.possible_cards);
 }
 void game_loop(console& graphics_console, console& text_console)
@@ -1128,9 +1150,9 @@ void game_loop(console& graphics_console, console& text_console)
 		}
 
 		for (int i = 0; i<15; i++)
-			discard.cards.push_back(strike_card());
+			discard.cards.push_back(sys.possible_cards["strike"]);
 		for (int i = 0; i<8; i++)
-			discard.cards.push_back(push_card());
+			discard.cards.push_back(sys.possible_cards["push"]);
 		end_enemy_turn(sys);
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;

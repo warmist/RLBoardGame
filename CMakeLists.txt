@@ -50,6 +50,7 @@ SET(PROJECT_HEADERS
     src/miniz.h
 	src/gui.hpp
 	src/card.hpp
+    src/lua_helper.hpp
     ${LUA}/lua.hpp
     ${LUA}/lualib.h
 	)

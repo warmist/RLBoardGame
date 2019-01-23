@@ -1,5 +1,5 @@
 deck={}
-
+print("Actually running lua code!")
 deck.strike={
 	name="Strike",
 	cost=2,

@@ -37,14 +37,15 @@ struct card_needs_input
 };
 struct console;
 struct lua_State;
+constexpr float phi = 1.61803398874989484820f;
 struct card
 {
-	std::string key;
-	std::string name;
-	std::string desc;
 	static const int card_w = 15;
 	static const int card_h = int(card_w*phi);
 
+	std::string key;
+	std::string name;
+	std::string desc;
 	/*
 	ART and stuff -> type
 	pre-use conditions -> cost, prereq_function (with somehow indicating failure?)
@@ -62,7 +63,7 @@ struct card
 	int cost_ap = 0;
 	card_needs_input needs;
 	//USE
-	int lua_func_use_ref = -2;//LUA_NOREF
+	//actual function is in lua
 	void use(lua_State* L, card_needs_output* out);
 	//POST_USE
 	card_fate after_use = card_fate::destroy;
