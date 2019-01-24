@@ -1,19 +1,30 @@
 deck={}
 print("Actually running lua code!")
 deck.strike={
+	--main
 	name="Strike",
 	cost=2,
 	description="Perform an attack with a very big sword",
-	tags={"attack 3","range 0"},
+	--misc
+	attack=3,
+	target="enemy",
+	range=0,
+	--callbacks
 	use=function ( card,game,data )
 		game.damage(data.target,card.attack)
 	end
 }
 deck.push={
+
 	name="Push",
 	cost=1,
 	description="Force a move. Deal damage if can't move",
-	tags={"attack 1","range 0","distance 3"},
+
+	attack=1,
+	target="enemy",
+	range=0,
+	distance=3,
+
 	use=function ( card,game,data )
 		--figure out the direction of push
 		local dir=data.target.pos-game.player.pos
@@ -33,8 +44,18 @@ deck.move={
 	name="Run",
 	cost=1,
 	description="Run to the target",
-	tags={"generated","range 5","move"},
+
+	generated=true,
+	target="space",
+	range=5,
+	move=true,
+
 	use=function (card,game,data)
+		for k,v in pairs(game) do
+			print(k,v)
+		end
+		print("Path:",#data.path)
+		print("Move called with:",game.player,#data.path);
 		game.move(game.player,data.path)
 	end
 }

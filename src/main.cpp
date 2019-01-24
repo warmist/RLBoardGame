@@ -1073,25 +1073,18 @@ int lua_sys_move(lua_State* L)
 {
 	printf("Called move!\n");
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
-	luaL_checktype(L, 1, 1);
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
 	auto mover = reinterpret_cast<entity*>(lua_touserdata(L, 1));
-	//get path
-	//make animation
-	/*int damage = luaL_checkint(L, 2);
-	if (enemy->type == entity_type::enemy)
-	{
-		auto anim = std::make_unique<anim_unit_walk>();
-		anim->path = nd->walkable_path;
-		std::reverse(anim->path.begin(), anim->path.end());
-		anim->walker = g.player;
-		g.animation = std::move(anim);
-		g.animation->start_animation();
-		g.gui_state = gui_state::animating;
-	}
-	else
-	{
-		luaL_error(L, "Invalid entity type. Expected e_enemy.");
-	}*/
+	auto path = lua_to_path(L, 2);
+
+	auto anim = std::make_unique<anim_unit_walk>();
+	anim->path = path;
+
+	anim->walker = sys.player;
+	sys.animation = std::move(anim);
+	sys.animation->start_animation();
+	sys.gui_state = gui_state::animating;
+	
 	return lua_yield(L, 0);
 }
 void init_lua_system(game_systems& sys)
@@ -1107,6 +1100,9 @@ void init_lua_system(game_systems& sys)
 	lua_pushlightuserdata(L, &sys);
 	lua_pushcclosure(L, lua_sys_move, 1);
 	lua_setfield(L, -2, "move");
+
+	lua_pushlightuserdata(L, sys.player);
+	lua_setfield(L, -2, "player");
 
 	lua_setfield(L, -2, "system");
 
@@ -1158,10 +1154,7 @@ void game_loop(console& graphics_console, console& text_console)
 	while (window.isOpen())
 	{
 		game_systems sys;
-		//TODO: defer lua_close
-		sys.L = luaL_newstate();
-		init_lua(sys);
-
+		
 		std::random_device rd;
 		sys.rand.seed(rd());
 
@@ -1235,16 +1228,24 @@ void game_loop(console& graphics_console, console& text_console)
 			world.entities.emplace_back(enemy);
 		}
 
-		for (int i = 0; i<15; i++)
-			discard.cards.push_back(sys.possible_cards["strike"]);
-		for (int i = 0; i<8; i++)
-			discard.cards.push_back(sys.possible_cards["push"]);
-		end_enemy_turn(sys);
+		
+		
 		//int size_min = std::min(map_w, map_h);
 		v2i center = v2i(map_w, map_h) / 2;
 		sys.restart = false;
 		v2i from_click;
 		v2i last_mouse;
+
+		//TODO: defer lua_close
+		sys.L = luaL_newstate();
+		init_lua(sys);
+
+
+		for (int i = 0; i<15; i++)
+			discard.cards.push_back(sys.possible_cards["strike"]);
+		for (int i = 0; i<8; i++)
+			discard.cards.push_back(sys.possible_cards["push"]);
+		end_enemy_turn(sys);
 
 		while (!sys.restart && window.isOpen())
 		{

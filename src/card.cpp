@@ -76,7 +76,8 @@ void lua_push_needs(lua_State* L, card* c, card_needs_output* data)
 	{
 	case card_needs::walkable_path:
 	{
-		//lua_push_path(L,data->walkable_path)
+		lua_push_path(L, data->walkable_path);
+		lua_setfield(L, -2, "path");
 		break;
 	}
 	case card_needs::visible_target_unit:
@@ -142,6 +143,31 @@ void lua_load_card(lua_State* L, int arg, card& output)
 	lua_getfield(L, p, "cost");
 	output.cost_ap = (int)luaL_optinteger(L, -1, 0);
 	lua_pop(L, 1);
+
+	lua_getfield(L, p, "target");
+	std::string trg = lua_tostring(L, -1);
+	lua_pop(L, 1);
+
+	if (trg == "enemy")
+	{
+		output.needs.type = card_needs::visible_target_unit;
+	}
+	else if (trg == "space")
+	{
+		output.needs.type = card_needs::walkable_path;
+	}
+
+	lua_getfield(L, p, "range");
+	float range = (float)luaL_optnumber(L, -1, 0);
+	output.needs.distance = range;
+	lua_pop(L, 1);
+
+	lua_getfield(L, p, "generated");
+	bool is_generated = lua_toboolean(L, -1);
+	if (is_generated)
+		output.type = card_type::generated;
+	lua_pop(L, 1);
+
 
 	//TODO: read tags
 	//		use tags for card needs

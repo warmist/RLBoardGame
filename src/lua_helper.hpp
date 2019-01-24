@@ -1,5 +1,6 @@
 #include <cassert>
 #include "lua.hpp"
+#include "common.hpp"
 
 struct lua_stack_guard
 {
@@ -40,4 +41,45 @@ inline void print_stack(lua_State *L) {
 		printf("  ");  /* put a separator */
 	}
 	printf("\n");  /* end the listing */
+}
+
+inline std::vector<v2i> lua_to_path(lua_State* L, int arg)
+{
+	luaL_checktype(L, arg, LUA_TTABLE);
+	int count = (int)lua_objlen(L, arg);
+	std::vector<v2i> ret;
+	ret.resize(count);
+	for (int i = 1; i <= count; i++)
+	{
+		
+		lua_rawgeti(L, arg, i);
+		
+		lua_rawgeti(L, -1, 1);
+		ret[i - 1].x = (int)lua_tointeger(L, -1);
+		lua_pop(L, 1);
+
+		lua_rawgeti(L, -1, 2);
+		ret[i - 1].y = (int)lua_tointeger(L, -1);
+		lua_pop(L, 1);
+
+		lua_pop(L, 1);
+	}
+	return ret;
+}
+
+inline void lua_push_path(lua_State* L, const std::vector<v2i>& path)
+{
+	lua_createtable(L, (int)path.size(), 0);
+
+	for (int i = 0; i < (int)path.size();i++)
+	{
+		lua_createtable(L, 2, 0);
+		lua_pushinteger(L, path[i].x);
+		lua_rawseti(L, -2, 1);
+
+		lua_pushinteger(L, path[i].y);
+		lua_rawseti(L, -2, 2);
+
+		lua_rawseti(L, -2, i + 1);
+	}
 }
