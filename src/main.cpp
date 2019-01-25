@@ -461,14 +461,13 @@ public:
 	void render_gui(console& c, int x, int y)
 	{
 		//TODO: ugly, boring, not easy to see/use etc...
-		c.set_text(v2i(x, y),   "Health: ");
-		c.set_text(v2i(x, y+1), "Actions:");
+		c.set_text(v2i(x, y), "Actions:");
 
 		int dx = 0;
 		for (int i = 0; i < actions_per_turn- current_ap; i++)
-			c.set_char(v2i(x + 10 + (dx++), y + 1), (unsigned char)'\xad', v3f(0.4f, 0.4f, 0.4f));
+			c.set_char(v2i(x + 10 + (dx++), y ), (unsigned char)'\xad', v3f(0.4f, 0.4f, 0.4f));
 		for (int i = 0; i < current_ap; i++)
-			c.set_char(v2i(x + 10 + (dx++), y + 1), (unsigned char)'\xad', v3f(1, 1, 1));
+			c.set_char(v2i(x + 10 + (dx++), y ), (unsigned char)'\xad', v3f(1, 1, 1));
 
 		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
 	}
