@@ -598,7 +598,7 @@ void use_card_actual(card& card, game_systems& g)
 	g.player->current_ap -= card.cost_ap;
 
 	g.yielded_L = card.yieldable_use(g.L, &g.needs_out);
-	g.coroutine_ref=luaL_ref(g.L, -1);
+	g.coroutine_ref=luaL_ref(g.L, LUA_REGISTRYINDEX);
 
 	check_for_yielded_lua(g,3);
 }
@@ -813,6 +813,7 @@ void handle_selecting_path(console& con, game_systems& sys)
 		if (path.size() != 0)
 		{
 			sys.needs_out.walkable_path = path;
+			std::reverse(sys.needs_out.walkable_path.begin(), sys.needs_out.walkable_path.end());
 			use_card_actual(card, sys);
 			return;
 		}
@@ -885,7 +886,7 @@ void done_yielded_lua(game_systems& sys)
 	if (sys.yielded_L)
 	{
 		sys.yielded_L = nullptr;
-		
+		luaL_unref(sys.L, LUA_REGISTRYINDEX,sys.coroutine_ref);
 	}
 
 	auto& hand = *sys.hand;
@@ -1080,7 +1081,7 @@ int lua_sys_move(lua_State* L)
 	auto anim = std::make_unique<anim_unit_walk>();
 	anim->path = path;
 
-	anim->walker = sys.player;
+	anim->walker = mover;
 	sys.animation = std::move(anim);
 	sys.animation->start_animation();
 	sys.gui_state = gui_state::animating;
@@ -1293,7 +1294,10 @@ void game_loop(console& graphics_console, console& text_console)
 						save_map(world);
 					if (event.key.code == sf::Keyboard::L)
 						load_map(world);
-
+					if (event.key.code == sf::Keyboard::A)
+					{
+						sys.player->current_ap = sys.player->actions_per_turn;
+					}
 				}
 				if (event.type == sf::Event::MouseMoved)
 				{

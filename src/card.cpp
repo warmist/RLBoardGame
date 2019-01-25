@@ -92,6 +92,7 @@ void lua_push_needs(lua_State* L, card* c, card_needs_output* data)
 }
 lua_State* card::yieldable_use(lua_State* L, card_needs_output* out)
 {
+	lua_stack_guard g(L,1);
 	//start a lua coroutine. 
 	//This then can get yielded a few times until the effects are all "animated"
 	lua_getregistry(L);
@@ -114,8 +115,14 @@ lua_State* card::yieldable_use(lua_State* L, card_needs_output* out)
 	//push required data from needs output
 	lua_push_needs(L,this, out);
 	auto L1 = lua_newthread(L);
+	lua_stack_guard g1(L1,4);
 	lua_insert(L, lua_gettop(L) - 4); //move thread under args+function
 	lua_xmove(L, L1, 4); //transfer everything needed for the fcall
+	printf("L1:\n");
+	print_stack(L1);
+	lua_insert(L, 1);
+	lua_pop(L, 3);
+	printf("L:\n");
 	print_stack(L);
 	return L1;
 }

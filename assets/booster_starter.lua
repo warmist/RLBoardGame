@@ -51,11 +51,6 @@ deck.move={
 	move=true,
 
 	use=function (card,game,data)
-		for k,v in pairs(game) do
-			print(k,v)
-		end
-		print("Path:",#data.path)
-		print("Move called with:",game.player,#data.path);
 		game.move(game.player,data.path)
 	end
 }
