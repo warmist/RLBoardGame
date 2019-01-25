@@ -1088,19 +1088,17 @@ int lua_sys_move(lua_State* L)
 	
 	return lua_yield(L, 0);
 }
+
+#define ADD_SYS_COMMAND(name) lua_pushlightuserdata(L, &sys);lua_pushcclosure(L, lua_sys_## name, 1); lua_setfield(L, -2, # name)
 void init_lua_system(game_systems& sys)
 {
 	auto L = sys.L;
 	lua_getregistry(L);
 	lua_newtable(L);
 
-	lua_pushlightuserdata(L, &sys);
-	lua_pushcclosure(L, lua_sys_damage,1);
-	lua_setfield(L, -2, "damage");
-
-	lua_pushlightuserdata(L, &sys);
-	lua_pushcclosure(L, lua_sys_move, 1);
-	lua_setfield(L, -2, "move");
+	ADD_SYS_COMMAND(damage);
+	ADD_SYS_COMMAND(move);
+	
 
 	lua_pushlightuserdata(L, sys.player);
 	lua_setfield(L, -2, "player");
@@ -1112,6 +1110,7 @@ void init_lua_system(game_systems& sys)
 
 	lua_pop(L, 1);
 }
+#undef ADD_SYS_COMMAND
 static int wrap_exceptions(lua_State *L, lua_CFunction f)
 {
 	try {
