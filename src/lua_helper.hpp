@@ -42,7 +42,42 @@ inline void print_stack(lua_State *L) {
 	}
 	printf("\n");  /* end the listing */
 }
+/*
+static int typeerror(lua_State *L, int narg, const char *tname) {
+	const char *msg = lua_pushfstring(L, "%s expected, got %s",
+		tname, luaL_typename(L, narg));
+	return luaL_argerror(L, narg, msg);
+}
 
+
+static void tag_error(lua_State *L, int narg, int tag) {
+	typeerror(L, narg, lua_typename(L, tag));
+}
+
+LUALIB_API const char *luaL_checklstring (lua_State *L, int narg, size_t *len) {
+const char *s = lua_tolstring(L, narg, len);
+if (!s) tag_error(L, narg, LUA_TSTRING);
+return s;
+}
+
+*/
+inline v2i luaL_checkv2i(lua_State* L,int arg)
+{
+	if(lua_type(L,arg)!=LUA_TTABLE || lua_objlen(L,arg)<2)
+	{
+		auto err = lua_pushfstring(L, "{x,y} expected, got %s", luaL_typename(L, arg));
+		luaL_argerror(L, arg, err);
+	}
+	v2i ret;
+	lua_rawgeti(L, arg, 1);
+	ret.x = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	lua_rawgeti(L, arg, 2);
+	ret.y = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return ret;
+}
 inline std::vector<v2i> lua_to_path(lua_State* L, int arg)
 {
 	luaL_checktype(L, arg, LUA_TTABLE);

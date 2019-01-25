@@ -1088,7 +1088,30 @@ int lua_sys_move(lua_State* L)
 	
 	return lua_yield(L, 0);
 }
+int lua_sys_target_path(lua_State* L)
+{
+	printf("Called target path!\n");
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	v2i pos = luaL_checkv2i(L, 1);
+	float range = (float)luaL_checknumber(L, 2);
 
+	sys.map->pathfind_field(pos, range);
+	sys.gui_state = gui_state::selecting_path;
+
+	return lua_yield(L, 0);
+}
+int lua_sys_target_enemy(lua_State* L)
+{
+	printf("Called target path!\n");
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	v2i pos = luaL_checkv2i(L, 1);
+	float range = (float)luaL_checknumber(L, 2);
+
+	fill_enemy_choices(pos, range, *sys.map, sys.enemy_choices);
+	sys.gui_state = gui_state::selecting_enemy;
+
+	return lua_yield(L, 0);
+}
 #define ADD_SYS_COMMAND(name) lua_pushlightuserdata(L, &sys);lua_pushcclosure(L, lua_sys_## name, 1); lua_setfield(L, -2, # name)
 void init_lua_system(game_systems& sys)
 {
@@ -1098,7 +1121,7 @@ void init_lua_system(game_systems& sys)
 
 	ADD_SYS_COMMAND(damage);
 	ADD_SYS_COMMAND(move);
-	
+	ADD_SYS_COMMAND(target_path);
 
 	lua_pushlightuserdata(L, sys.player);
 	lua_setfield(L, -2, "player");

@@ -10,7 +10,7 @@ deck.strike={
 	range=0,
 	--callbacks
 	use=function ( card,game )
-		local target=game.target_enemy(game.player,card.range)
+		local target=game.target_enemy(game.player.pos,card.range)
 		game.damage(target,card.attack)
 	end
 }
@@ -26,7 +26,10 @@ deck.push={
 
 	use=function ( card,game )
 		--first ask which one of enemies you want to push
-		local target=game.target_enemy(game.player,card.range)
+		local target=game.target_enemy(game.player.pos,card.range)
+		--by default if the first "target" function is canceled. the whole
+		--		card is not played and returned to the hand
+
 		--figure out the direction of push
 		local dir=target.pos-game.player.pos
 		dir=dir/dir:lenght()
@@ -51,7 +54,7 @@ deck.move={
 	move=true,
 
 	use=function (card,game)
-		local path=game.target_path(game.player,card.range)
+		local path=game.target_path(game.player.pos,card.range)
 		game.move(game.player,path)
 	end
 }
