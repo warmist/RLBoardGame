@@ -69,27 +69,6 @@ void card::render(console & c, int x, int y)
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc);
 }
 #include "lua_helper.hpp"
-void lua_push_needs(lua_State* L, card* c, card_needs_output* data)
-{
-	lua_newtable(L);
-	switch (c->needs.type)
-	{
-	case card_needs::walkable_path:
-	{
-		lua_push_path(L, data->walkable_path);
-		lua_setfield(L, -2, "path");
-		break;
-	}
-	case card_needs::visible_target_unit:
-	{
-		//lua_push_entity(L,data->visible_target_unit)
-		break;
-	}
-	case card_needs::nothing:
-	default:
-		break;
-	}
-}
 lua_State* card::yieldable_use(lua_State* L, card_needs_output* out)
 {
 	lua_stack_guard g(L,1);
@@ -112,12 +91,10 @@ lua_State* card::yieldable_use(lua_State* L, card_needs_output* out)
 	//copy lua table with global systems (from registry)
 	lua_getfield(L, card_data_pos-2, "system");
 	
-	//push required data from needs output
-	lua_push_needs(L,this, out);
 	auto L1 = lua_newthread(L);
-	lua_stack_guard g1(L1,4);
-	lua_insert(L, lua_gettop(L) - 4); //move thread under args+function
-	lua_xmove(L, L1, 4); //transfer everything needed for the fcall
+	lua_stack_guard g1(L1,3);
+	lua_insert(L, lua_gettop(L) - 3); //move thread under args+function
+	lua_xmove(L, L1, 3); //transfer everything needed for the fcall
 	printf("L1:\n");
 	print_stack(L1);
 	lua_insert(L, 1);
@@ -149,24 +126,6 @@ void lua_load_card(lua_State* L, int arg, card& output)
 
 	lua_getfield(L, p, "cost");
 	output.cost_ap = (int)luaL_optinteger(L, -1, 0);
-	lua_pop(L, 1);
-
-	lua_getfield(L, p, "target");
-	std::string trg = lua_tostring(L, -1);
-	lua_pop(L, 1);
-
-	if (trg == "enemy")
-	{
-		output.needs.type = card_needs::visible_target_unit;
-	}
-	else if (trg == "space")
-	{
-		output.needs.type = card_needs::walkable_path;
-	}
-
-	lua_getfield(L, p, "range");
-	float range = (float)luaL_optnumber(L, -1, 0);
-	output.needs.distance = range;
 	lua_pop(L, 1);
 
 	lua_getfield(L, p, "generated");

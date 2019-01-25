@@ -7,13 +7,6 @@ enum class card_type
 	generated,
 	wound,
 };
-enum class card_needs
-{
-	nothing,
-	visible_target_unit,
-	walkable_path,
-	//more?
-};
 enum class card_fate
 {
 	destroy, //as in - no longer in game
@@ -29,11 +22,6 @@ struct card_needs_output
 {
 	entity* visible_target_unit;
 	std::vector<v2i> walkable_path;
-};
-struct card_needs_input
-{
-	card_needs type = card_needs::nothing;
-	float distance;
 };
 struct console;
 struct lua_State;
@@ -61,7 +49,6 @@ struct card
 	card_type type = card_type::action;
 	//PRE_USE
 	int cost_ap = 0;
-	card_needs_input needs;
 	//USE
 	//actual function is in lua
 	lua_State* yieldable_use(lua_State* L, card_needs_output* out);
