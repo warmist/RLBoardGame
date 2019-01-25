@@ -51,7 +51,7 @@ struct card
 	int cost_ap = 0;
 	//USE
 	//actual function is in lua
-	lua_State* yieldable_use(lua_State* L, card_needs_output* out);
+	lua_State* yieldable_use(lua_State* L);
 	//POST_USE
 	card_fate after_use = card_fate::destroy;
 

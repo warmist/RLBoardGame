@@ -61,7 +61,7 @@ return s;
 }
 
 */
-inline v2i luaL_checkv2i(lua_State* L,int arg)
+inline v2i luaL_check_v2i(lua_State* L,int arg)
 {
 	if(lua_type(L,arg)!=LUA_TTABLE || lua_objlen(L,arg)<2)
 	{
@@ -77,6 +77,32 @@ inline v2i luaL_checkv2i(lua_State* L,int arg)
 	ret.y = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 	return ret;
+}
+inline v2f luaL_check_v2f(lua_State* L, int arg)
+{
+	if (lua_type(L, arg) != LUA_TTABLE || lua_objlen(L, arg)<2)
+	{
+		auto err = lua_pushfstring(L, "{x,y} expected, got %s", luaL_typename(L, arg));
+		luaL_argerror(L, arg, err);
+	}
+	v2f ret;
+	lua_rawgeti(L, arg, 1);
+	ret.x = (float)lua_tonumber(L, -1);
+	lua_pop(L, 1);
+
+	lua_rawgeti(L, arg, 2);
+	ret.y = (float)lua_tonumber(L, -1);
+	lua_pop(L, 1);
+	return ret;
+}
+inline void lua_push_v2i(lua_State* L, v2i arg)
+{
+	lua_createtable(L, 2, 0);
+	lua_pushinteger(L, arg.x);
+	lua_rawseti(L, -2, 1);
+
+	lua_pushinteger(L, arg.y);
+	lua_rawseti(L, -2, 2);
 }
 inline std::vector<v2i> lua_to_path(lua_State* L, int arg)
 {

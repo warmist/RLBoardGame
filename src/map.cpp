@@ -205,7 +205,7 @@ std::vector<v2i> map::get_path(v2i target,int max_len)
 	
 }
 
-void map::render_path(console & trg, const std::vector<v2i>& path, const v3f & color_ok, const v3f & color_fail)
+void map::render_path(console & trg, const std::vector<v2i>& path, const v3f & color_ok)
 {
 	for (auto& p : path)
 	{
@@ -213,6 +213,25 @@ void map::render_path(console & trg, const std::vector<v2i>& path, const v3f & c
 		if(view_rect.is_inside(pv))
 			trg.set_back(pv, color_ok);
 	}
+}
+
+std::vector<v2i> map::raycast(v2i pos, v2f dir)
+{
+	v2f floating_part(float(pos.x),float(pos.y));
+	std::vector<v2i> ret;
+	if (dir.dot(dir) < 0.000001)
+		return ret;
+	//resize dir so one direction is 1
+	dir /= (abs(dir.x) > abs(dir.y)) ? (abs(dir.x)) : (abs(dir.y));
+	while(true)
+	{
+		pos = v2i((int)floating_part.x, (int)floating_part.y);
+		if (!is_valid_coord(pos) || !is_passible(pos.x, pos.y))
+			return ret;
+		ret.push_back(pos);
+		floating_part += dir;
+	}
+	return ret;
 }
 
 void map::compact_entities()

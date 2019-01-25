@@ -474,8 +474,8 @@ public:
 };
 struct e_enemy :public entity
 {
-	int current_hp=3;
-	int max_hp=3;
+	int current_hp = 3;
+	int max_hp = 3;
 
 	int move = 3;
 	int dmg = 1;
@@ -484,6 +484,60 @@ struct e_enemy :public entity
 	bool done_move = false;
 	bool done_dmg = false;
 };
+
+entity* luaL_check_entity(lua_State*L, int arg) { 
+	
+	if (auto ret = luaL_testudata(L, arg, "entity"))
+	{
+		return *static_cast<entity**>(ret);
+	}
+	else if (auto ret = luaL_testudata(L, arg, "entity.player"))
+	{
+		return *static_cast<e_player**>(ret);
+	}
+	else if (auto ret = luaL_testudata(L, arg, "entity.enemy"))
+	{
+		return *static_cast<e_enemy**>(ret);
+	}
+	luaL_typerror(L, arg, "entity.*");
+	return nullptr;
+}
+e_player* luaL_check_player(lua_State*L ,int arg){return *static_cast<e_player**>(luaL_checkudata(L, arg, "entity.player"));}
+e_enemy* luaL_check_enemy(lua_State*L, int arg) { return *static_cast<e_enemy**>(luaL_checkudata(L, arg, "entity.enemy")); }
+int lua_entity_pos(lua_State*L)
+{
+	auto p = luaL_check_entity(L, 1);
+	lua_push_v2i(L, p->pos);
+	return 1;
+}
+void lua_push_player(lua_State*L, e_player* ptr)
+{
+	auto np = lua_newuserdata(L, sizeof(ptr));
+	*reinterpret_cast< e_player**>(np) = ptr;
+	if (luaL_newmetatable(L, "entity.player"))
+	{
+		lua_pushcfunction(L, lua_entity_pos);
+		lua_setfield(L, -2, "pos");
+		
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+}
+void lua_push_enemy(lua_State*L, e_enemy* ptr)
+{
+	auto np = lua_newuserdata(L, sizeof(ptr));
+	*reinterpret_cast< e_enemy**>(np) = ptr;
+	if (luaL_newmetatable(L, "entity.enemy"))
+	{
+		lua_pushcfunction(L, lua_entity_pos);
+		lua_setfield(L, -2, "pos");
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+}
 
 //enemy receives damage
 struct anim_enemy_damage :public anim
@@ -551,8 +605,8 @@ struct game_systems
 	card_deck* deck;
 	card_deck* discard;
 
-	card_needs_output needs_out;
-
+	bool first_lua_target_function;
+	//lua stuff
 	lua_State* L = nullptr;
 	lua_State* yielded_L = nullptr;
 	int coroutine_ref = LUA_NOREF;
@@ -569,7 +623,9 @@ void act_move(card& c, game_systems& g, card_needs_output* nd)
 	g.gui_state = gui_state::animating;
 }
 void done_yielded_lua(game_systems& sys);
-void check_for_yielded_lua(game_systems& sys, int args_pushed = 0)
+void finish_card_use(game_systems& sys, bool soft_cancel);
+void cancel_card_use(game_systems& sys);
+void resume_card_use(game_systems& sys, int args_pushed = 0)
 {
 	if (!sys.yielded_L)
 	{
@@ -583,6 +639,7 @@ void check_for_yielded_lua(game_systems& sys, int args_pushed = 0)
 	{
 		//all done running state from lua return to normal working
 		done_yielded_lua(sys);
+		finish_card_use(sys, false);
 		return;
 	}
 	else if (result != LUA_YIELD)
@@ -594,12 +651,12 @@ void check_for_yielded_lua(game_systems& sys, int args_pushed = 0)
 void use_card_actual(card& card, game_systems& g)
 {
 	auto& hand = *g.hand;
-	g.player->current_ap -= card.cost_ap;
 
-	g.yielded_L = card.yieldable_use(g.L, &g.needs_out);
+	g.first_lua_target_function = true; //reset "first target func" condition
+	g.yielded_L = card.yieldable_use(g.L);
 	g.coroutine_ref=luaL_ref(g.L, LUA_REGISTRYINDEX);
 
-	check_for_yielded_lua(g,3);
+	resume_card_use(g,2);
 }
 void fill_enemy_choices(v2i center, float distance,map& m, std::vector<e_enemy*>& enemies)
 {
@@ -627,25 +684,6 @@ void handle_card_use(bool click,game_systems& g)
 		{
 			card.is_warn_ap = true;
 			card.warn_ap.restart();
-			return;
-		}
-		if (card.needs.type != card_needs::nothing)
-		{
-			//prep for needs
-			switch (card.needs.type)
-			{
-			case card_needs::visible_target_unit:
-				fill_enemy_choices(g.player->pos, card.needs.distance, *g.map, g.enemy_choices);				
-				g.gui_state = gui_state::selecting_enemy;
-				break;
-			case card_needs::walkable_path:
-				g.map->pathfind_field(g.player->pos, card.needs.distance);
-				g.gui_state = gui_state::selecting_path;
-				break;
-			default:
-				assert(false);
-			}
-			
 			return;
 		}
 		use_card_actual(card, g);
@@ -799,7 +837,7 @@ void handle_selecting_path(console& con, game_systems& sys)
 	v2i mouse_pos = get_mouse(con);
 	auto path = sys.map->get_path(mouse_pos + sys.map->view_pos);
 	v3f color_fail = v3f(0.8f, 0.2f, 0.4f);
-	sys.map->render_path(con, path, v3f(0.3f, 0.7f, 0.2f), color_fail);
+	sys.map->render_path(con, path, v3f(0.3f, 0.7f, 0.2f));
 
 	if (path.size() == 0)
 		con.set_back(mouse_pos, color_fail);
@@ -811,14 +849,16 @@ void handle_selecting_path(console& con, game_systems& sys)
 	{
 		if (path.size() != 0)
 		{
-			sys.needs_out.walkable_path = path;
-			std::reverse(sys.needs_out.walkable_path.begin(), sys.needs_out.walkable_path.end());
-			use_card_actual(card, sys);
+			std::reverse(path.begin(), path.end());
+			lua_push_path(sys.yielded_L, path);
+			sys.first_lua_target_function = false;
+			resume_card_use(sys,1);
 			return;
 		}
 	}
 	if (get_mouse_right())
 	{
+		cancel_card_use(sys);
 		sys.gui_state = gui_state::player_turn;
 	}
 }
@@ -869,25 +909,40 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 	{
 		if (choices.size() != 0 && selected_id != -1)
 		{
-			sys.needs_out.visible_target_unit = choices[selected_id];
-			use_card_actual(card, sys);
+			lua_push_enemy(sys.yielded_L, choices[selected_id]);
+			sys.first_lua_target_function = false;
+			resume_card_use(sys,1);
 			return;
 		}
 	}
 	if (get_mouse_right())
 	{
+		cancel_card_use(sys);
 		sys.gui_state = gui_state::player_turn;
 	}
 }
+
 void done_yielded_lua(game_systems& sys)
 {
 	sys.gui_state = gui_state::player_turn;
 	if (sys.yielded_L)
 	{
 		sys.yielded_L = nullptr;
-		luaL_unref(sys.L, LUA_REGISTRYINDEX,sys.coroutine_ref);
+		luaL_unref(sys.L, LUA_REGISTRYINDEX, sys.coroutine_ref);
 	}
+}
+void cancel_card_use(game_systems& sys)
+{
+	//if it didn't yet do anything, return it
+	//if it already might have done something. procede to ??
+	bool soft_cancel = sys.first_lua_target_function;
 
+	done_yielded_lua(sys);
+	finish_card_use(sys, soft_cancel);
+}
+
+void finish_card_use(game_systems& sys,bool soft_cancel)
+{
 	auto& hand = *sys.hand;
 	auto id = hand.selected_card;
 	if (id == -1 || id >= hand.cards.size())
@@ -895,8 +950,11 @@ void done_yielded_lua(game_systems& sys)
 		assert(false);
 	}
 	auto& card = hand.cards[id];
-
-	auto ret = card.after_use;
+	if (!soft_cancel)
+	{
+		sys.player->current_ap -= card.cost_ap;
+	}
+	auto ret = (soft_cancel)?(card_fate::hand):(card.after_use);
 	switch (ret)
 	{
 	case card_fate::destroy:
@@ -933,7 +991,6 @@ void done_yielded_lua(game_systems& sys)
 		break;
 	}
 }
-
 void handle_animating(console& con, game_systems& sys)
 {
 	if (auto anim = sys.animation.get())
@@ -943,7 +1000,7 @@ void handle_animating(console& con, game_systems& sys)
 		{
 			sys.animation.reset();
 			//int args_from_anim = anim->push_lua_args();
-			check_for_yielded_lua(sys);
+			resume_card_use(sys);
 		}
 	}
 	else
@@ -1050,31 +1107,24 @@ int lua_sys_damage(lua_State* L)
 {
 	printf("Called damage!\n");
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
-	luaL_checktype(L, 1, 1);
-	auto enemy = reinterpret_cast<entity*>(lua_touserdata(L, 1));
+	
+	auto enemy = luaL_check_enemy(L, 1);
 	int damage = luaL_checkint(L, 2);
-	if (enemy->type == entity_type::enemy)
-	{
-		auto anim = std::make_unique<anim_enemy_damage>();
-		anim->enemy = static_cast<e_enemy*>(enemy);
-		anim->damage_to_do = damage;
 
-		sys.animation = std::move(anim);
-		sys.animation->start_animation();
-		sys.gui_state = gui_state::animating;
-	}
-	else
-	{
-		luaL_error(L, "Invalid entity type. Expected e_enemy.");
-	}
+	auto anim = std::make_unique<anim_enemy_damage>();
+	anim->enemy = enemy;
+	anim->damage_to_do = damage;
+
+	sys.animation = std::move(anim);
+	sys.animation->start_animation();
+	sys.gui_state = gui_state::animating;
 	return lua_yield(L,0);
 }
 int lua_sys_move(lua_State* L)
 {
 	printf("Called move!\n");
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
-	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
-	auto mover = reinterpret_cast<entity*>(lua_touserdata(L, 1));
+	auto mover = luaL_check_entity(L, 1);
 	auto path = lua_to_path(L, 2);
 
 	auto anim = std::make_unique<anim_unit_walk>();
@@ -1091,7 +1141,7 @@ int lua_sys_target_path(lua_State* L)
 {
 	printf("Called target path!\n");
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
-	v2i pos = luaL_checkv2i(L, 1);
+	v2i pos = luaL_check_v2i(L, 1);
 	float range = (float)luaL_checknumber(L, 2);
 
 	sys.map->pathfind_field(pos, range);
@@ -1101,9 +1151,9 @@ int lua_sys_target_path(lua_State* L)
 }
 int lua_sys_target_enemy(lua_State* L)
 {
-	printf("Called target path!\n");
+	printf("Called target enemy!\n");
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
-	v2i pos = luaL_checkv2i(L, 1);
+	v2i pos = luaL_check_v2i(L, 1);
 	float range = (float)luaL_checknumber(L, 2);
 
 	fill_enemy_choices(pos, range, *sys.map, sys.enemy_choices);
@@ -1121,8 +1171,9 @@ void init_lua_system(game_systems& sys)
 	ADD_SYS_COMMAND(damage);
 	ADD_SYS_COMMAND(move);
 	ADD_SYS_COMMAND(target_path);
+	ADD_SYS_COMMAND(target_enemy);
 
-	lua_pushlightuserdata(L, sys.player);
+	lua_push_player(L, sys.player);
 	lua_setfield(L, -2, "player");
 
 	lua_setfield(L, -2, "system");
@@ -1231,6 +1282,16 @@ void game_loop(console& graphics_console, console& text_console)
 			auto enemy = new e_enemy;
 
 			enemy->pos = v2i(map_w / 2+5, map_h / 2);
+			enemy->glyph = 'g';
+			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
+			enemy->type = entity_type::enemy;
+
+			world.entities.emplace_back(enemy);
+		}
+		{
+			auto enemy = new e_enemy;
+
+			enemy->pos = v2i(map_w / 2 -1, map_h / 2);
 			enemy->glyph = 'g';
 			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
 			enemy->type = entity_type::enemy;
@@ -1370,6 +1431,12 @@ void game_loop(console& graphics_console, console& text_console)
 			}
 			
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
+			for(float t=0;t<3.14;t+=0.01f)
+			{
+				auto p=world.raycast(sys.player->pos+v2i(0,1), v2f(cos(t), sin(t)));
+				world.render_path(graphics_console, p, v3f(0.5, 1, 1));
+			}
+
 			//draw_asciimap(graphics_console);
 			//if (&text_console != &graphics_console)
 			//	text_console.render();
