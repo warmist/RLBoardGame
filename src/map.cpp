@@ -234,6 +234,30 @@ std::vector<v2i> map::raycast(v2i pos, v2f dir)
 	return ret;
 }
 
+std::vector<v2i> map::raycast_target(v2i pos, v2i target)
+{
+	v2f floating_part(float(pos.x), float(pos.y));
+	std::vector<v2i> ret;
+	if (pos == target)
+		return ret;
+	v2i diri = (target - pos);
+	v2f dir(float(diri.x), float(diri.y));
+	dir /= sqrt(dir.dotf(dir));
+	//resize dir so one direction is 1
+	dir /= (abs(dir.x) > abs(dir.y)) ? (abs(dir.x)) : (abs(dir.y));
+	while (true)
+	{
+		pos = v2i((int)floating_part.x, (int)floating_part.y);
+		if (!is_valid_coord(pos) || !is_passible(pos.x, pos.y))
+			return ret;
+		ret.push_back(pos);
+		if (pos == target)
+			return ret;
+		floating_part += dir;
+	}
+	return ret;
+}
+
 void map::compact_entities()
 {
 	entities.erase(std::remove_if(entities.begin(), entities.end(), [](const std::unique_ptr<entity>& a) {

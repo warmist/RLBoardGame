@@ -72,6 +72,7 @@ struct map
 	std::vector<v2i> get_path(v2i target,int max_len=-1);
 	void render_path(console& trg, const std::vector<v2i>& path, const v3f& color_ok);
 	std::vector<v2i> raycast(v2i pos, v2f dir);
+	std::vector<v2i> raycast_target(v2i pos, v2i target);
     //helper functions
     inline bool is_valid_coord(int x, int y) const { return x >= 0 && y >= 0 && x < static_layer.w && y < static_layer.h; }
 	inline bool is_valid_coord(v2i p) const { return p.x >= 0 && p.y >= 0 && p.x < static_layer.w && p.y < static_layer.h; }

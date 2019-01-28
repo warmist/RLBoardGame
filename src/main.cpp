@@ -1161,6 +1161,18 @@ int lua_sys_target_enemy(lua_State* L)
 
 	return lua_yield(L, 0);
 }
+int lua_sys_raycast(lua_State* L)
+{
+	printf("Called raycast!\n");
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	v2i pos = luaL_check_v2i(L, 1);
+	v2i target = luaL_check_v2i(L, 2);
+
+	auto ret=sys.map->raycast_target(pos, target);
+	lua_push_path(L, ret);
+
+	return 1;
+}
 #define ADD_SYS_COMMAND(name) lua_pushlightuserdata(L, &sys);lua_pushcclosure(L, lua_sys_## name, 1); lua_setfield(L, -2, # name)
 void init_lua_system(game_systems& sys)
 {
@@ -1172,6 +1184,7 @@ void init_lua_system(game_systems& sys)
 	ADD_SYS_COMMAND(move);
 	ADD_SYS_COMMAND(target_path);
 	ADD_SYS_COMMAND(target_enemy);
+	ADD_SYS_COMMAND(raycast);
 
 	lua_push_player(L, sys.player);
 	lua_setfield(L, -2, "player");
@@ -1431,11 +1444,6 @@ void game_loop(console& graphics_console, console& text_console)
 			}
 			
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
-			for(float t=0;t<3.14;t+=0.01f)
-			{
-				auto p=world.raycast(sys.player->pos+v2i(0,1), v2f(cos(t), sin(t)));
-				world.render_path(graphics_console, p, v3f(0.5, 1, 1));
-			}
 
 			//draw_asciimap(graphics_console);
 			//if (&text_console != &graphics_console)

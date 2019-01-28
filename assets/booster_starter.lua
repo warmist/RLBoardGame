@@ -13,6 +13,10 @@ end
 function vec_len( a )
 	return math.sqrt(a[1]*a[1]+a[2]*a[2])
 end
+function next_cell( pos,dir )
+	local dir2=vec_div(dir,math.max(math.abs(dir[1]),math.abs(dir[2])))
+	return vec_add(pos,dir2)
+end
 deck={}
 print("Actually running lua code!")
 deck.strike={
@@ -46,11 +50,13 @@ deck.push={
 		--		card is not played and returned to the hand
 
 		--figure out the direction of push
-		local dir=target:pos()-game.player:pos()
+		local dir=vec_sub(target:pos(),game.player:pos())
 		dir=vec_mul(dir,1/vec_len(dir))
 		local start=target:pos()
 		--raycast (i.e. like going straight in that direction)
-		local path=game.raycast(vec_add(start,dir),dir,card.distance-1,target)
+
+		local target_cell=vec_add(start,vec_mul(dir,card.distance))
+		local path=game.raycast(next_cell(start,dir),target_cell)
 		--move the unit
 		game.move(target,path)
 		--then if the unit could not move ALL the way, hurt it
