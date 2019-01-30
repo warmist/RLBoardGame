@@ -1,6 +1,7 @@
 
 #include "common.hpp"
 #include "console.hpp"
+#define LUA_HELPER_IMPLEMENTATION
 #include "lua_helper.hpp"
 
 #include "map.hpp"
@@ -12,6 +13,7 @@
 //assets
 #include "asset_cp437_12x12.hpp"
 #include "asset_paul_10x10.hpp"
+#include "asset_vector_lib.hpp"
 
 #include <array>
 
@@ -644,6 +646,7 @@ void resume_card_use(game_systems& sys, int args_pushed = 0)
 	}
 	else if (result != LUA_YIELD)
 	{
+		msghandler(sys.yielded_L);
 		printf("Error:%s\n", lua_tostring(sys.yielded_L, -1));
 		assert(false);
 	}
@@ -1215,23 +1218,37 @@ static int wrap_exceptions(lua_State *L, lua_CFunction f)
 }
 void init_lua(game_systems& sys)
 {
-	lua_stack_guard g(sys.L);
-	luaL_openlibs(sys.L);
+	auto L = sys.L;
+	lua_stack_guard g(L);
+	luaL_openlibs(L);
 
-	lua_pushlightuserdata(sys.L, (void *)wrap_exceptions);
-	luaJIT_setmode(sys.L, -1, LUAJIT_MODE_WRAPCFUNC | LUAJIT_MODE_ON);
-	lua_pop(sys.L, 1);
+	lua_pushlightuserdata(L, (void *)wrap_exceptions);
+	luaJIT_setmode(L, -1, LUAJIT_MODE_WRAPCFUNC | LUAJIT_MODE_ON);
+	lua_pop(L, 1);
+
+	if (luaL_loadbuffer(L, EMB_FILE_vector_lib, EMB_FILE_SIZE_vector_lib, "vector library") != 0)
+	{
+		printf("Lua load error:%s", lua_tostring(L, -1));
+		assert(false);
+	}
+	if (lua_safecall(L, 0, 2) != 0)
+	{
+		printf("Lua error:%s", lua_tostring(L, -1));
+		assert(false);
+	}
+	lua_setfield(L, LUA_REGISTRYINDEX, "vec2");
+	lua_setfield(L, LUA_REGISTRYINDEX, "vec3");
 
 	init_lua_system(sys);
 	
 	string path = asset_path + "/booster_starter.lua";
-	auto ret=luaL_dofile(sys.L, path.c_str());
-	if (ret != 0)
+	luaL_loadfile(L, path.c_str());
+	if (lua_safecall(L,0,LUA_MULTRET) != 0)
 	{
-		printf("Error:%s\n", lua_tostring(sys.L, -1));
+		printf("Error:%s\n", lua_tostring(L, -1));
 		assert(false);
 	}
-	lua_load_booster(sys.L,1, sys.possible_cards);
+	lua_load_booster(L,1, sys.possible_cards);
 }
 void game_loop(console& graphics_console, console& text_console)
 {
