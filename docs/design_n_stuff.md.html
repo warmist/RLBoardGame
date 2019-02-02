@@ -4,6 +4,13 @@ A random assortment of game ideas and mechanics thrown together.
 
 # Mechanics
 
+## Simplified game
+
+Instead of that all item management and skills and stuff:
+* Wounds cost other cards to remove
+* Each shuffle adds "Hunger" wound
+* Kills give cards (dependent on enemy) - usually good
+
 ## Wound system
 
 Instead of health have wound cards that get added to the deck or
@@ -74,14 +81,19 @@ Another idea: using item lets you add X cards to your deck. Using can be: killin
 * Card ideas and possible mechanics
 * Deck building ideas and rethink
 * Lua issues
-    - a more normal lua vector library
     - a more normal inheritance (very simple)
     - OR switch to composition?
     - a way to remove the "player:pos()" function call - maybe just replace the "index" metamethod?
 * Space to end turn gui indicator
 * Map generation
 * Persistence
+* Figure out how to set cards as "initial" and other stuff like that
 * Inventory and its management
+* Simplify and allow hooking into state machine
+    - cards that get triggered when sth happens to them
+    - move wound logic to cards/lua
+* Fix card data being shared (or do inheritance)
+
 ## References
 
 * [Guild of Dungeoneering][GoD]
