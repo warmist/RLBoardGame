@@ -158,3 +158,32 @@ void lua_load_booster(lua_State * L,int arg,lua_booster& output)
 	}
 	lua_pop(L, 1);//pop 
 }
+int lua_card_ref_tostring(lua_State* L)
+{
+	lua_rawgeti(L, 1, 1);
+	auto vector = reinterpret_cast<std::vector<card>*>(lua_touserdata(L,-1));
+	lua_rawgeti(L, 1, 2);
+	int id = (int)lua_tointeger(L, -1);
+	lua_pushfstring(L, "card<%p %d>: %s",vector,id,vector->at(id).name.c_str());
+	return 1;
+}
+void lua_push_card_ref(lua_State * L, std::vector<card>* vec, int id)
+{
+	lua_newtable(L);
+
+	lua_pushlightuserdata(L, vec);
+	lua_rawseti(L, -2, 1);
+	lua_pushinteger(L, id);
+	lua_rawseti(L, -2, 2);
+
+	if (luaL_newmetatable(L, "card.ref"))
+	{
+		//TODO: unfinished
+		lua_pushcfunction(L, lua_card_ref_tostring);
+		lua_setfield(L, -2, "__tostring");
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+}

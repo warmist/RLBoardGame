@@ -1176,18 +1176,60 @@ int lua_sys_raycast(lua_State* L)
 
 	return 1;
 }
+int lua_sys_get_cards(lua_State* L)
+{
+	printf("Called get_cards!\n");
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+	int card_location = luaL_checkint(L, 1);
+	if (card_location < 1 || card_location>3)
+	{
+		luaL_error(L, "Invalid location: %d, supported: 1,2,3",card_location);
+		return 0;
+	}
+	std::vector<card>* cards;
+	switch (card_location)
+	{
+	case 1:
+		cards = &sys.deck->cards;
+		break;
+	case 2:
+		cards = &sys.hand->cards;
+		break;
+	case 3:
+		cards = &sys.discard->cards;
+		break;
+	default:
+		luaL_error(L, "Reached an unreachable part! get_cards");
+		break;
+	}
+
+	lua_newtable(L);
+
+	for (size_t i = 0; i < cards->size(); i++)
+	{
+		//lua_push_card(L, cards[i]);
+		lua_push_card_ref(L,cards,(int)i);
+		lua_rawseti(L, -2, (int)i + 1);
+	}
+
+	return 1;
+}
 #define ADD_SYS_COMMAND(name) lua_pushlightuserdata(L, &sys);lua_pushcclosure(L, lua_sys_## name, 1); lua_setfield(L, -2, # name)
 void init_lua_system(game_systems& sys)
 {
 	auto L = sys.L;
 	lua_getregistry(L);
 	lua_newtable(L);
-
-	ADD_SYS_COMMAND(damage);
-	ADD_SYS_COMMAND(move);
+	//player interaction function
 	ADD_SYS_COMMAND(target_path);
 	ADD_SYS_COMMAND(target_enemy);
+	//animation functions
+	ADD_SYS_COMMAND(damage);
+	ADD_SYS_COMMAND(move);
+	//other
 	ADD_SYS_COMMAND(raycast);
+	ADD_SYS_COMMAND(get_cards);
 
 	lua_push_player(L, sys.player);
 	lua_setfield(L, -2, "player");

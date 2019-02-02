@@ -67,3 +67,5 @@ struct card
 using lua_booster = std::unordered_map<std::string, card>;
 
 void lua_load_booster(lua_State* L,int arg,lua_booster& output);
+
+void lua_push_card_ref(lua_State* L, std::vector<card>* vec, int id);
