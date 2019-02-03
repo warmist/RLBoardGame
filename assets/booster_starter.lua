@@ -61,8 +61,37 @@ deck.move={
 	move=true,
 
 	use=function (card,game)
+		for i=1,3 do
+			print("::::",i)
+			local cards=game.get_cards(i)
+			for i,v in ipairs(cards) do
+				print(i,v)
+			end
+		end
 		local path=game.target_path(game.player:pos(),card.range)
 		game.move(game.player,path)
+		return "destroy"
+	end
+}
+deck.wound={
+	name="Wound",
+	description="Loose game if 3 are in hand at the end of turn",
+	wound=true,
+	use=function ( card,game )
+		local cards=game.get_cards(2)
+		--[[
+		local tmp_cards={}
+		for i,v in ipairs(cards) do
+			if not v.wound then
+				table.insert(tmp_cards,v)
+			end
+		end
+		--]]
+		local tmp_cards=cards
+		local card_choice=game.target_card(tmp_cards)
+		
+		card_choice[1]:destroy()
+
 		return "destroy"
 	end
 }

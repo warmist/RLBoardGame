@@ -194,6 +194,7 @@ enum class gui_state
 	animating,
 	enemy_turn,
 	lost,
+	selecting_card,
 };
 enum class animation_type
 {
@@ -408,20 +409,13 @@ struct card_hand
 		}
 	}
 };
-card wound_card()
-{
-	card t_card;
-	t_card.name = "Wound";
-	t_card.desc = "Loose game if 3 are in hand";
-	t_card.type = card_type::wound;
-	return t_card;
-}
 //player receives damage
 struct anim_player_damage :public anim
 {
 	entity* player;
 	card_hand* player_wound_hand;
 	int damage_to_do;
+	card wound_card;
 
 	static const int tween_frames = 10;
 
@@ -451,7 +445,8 @@ struct anim_player_damage :public anim
 		}
 		if (tween_step == tween_frames - 1)
 		{
-			player_wound_hand->cards.push_back(wound_card());
+			
+			player_wound_hand->cards.push_back(wound_card);
 		}
 	}
 };
@@ -601,6 +596,9 @@ struct game_systems
 	anim_ptr animation;
 	std::unique_ptr<enemy_turn_data> e_turn;
 	std::vector<e_enemy*> enemy_choices;
+
+	int num_cards_select;
+	std::vector<card_ref> card_choices;
 	//
 	card_hand* hand;
 
@@ -924,7 +922,77 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 		sys.gui_state = gui_state::player_turn;
 	}
 }
-
+void handle_selecting_card(console& con, game_systems& sys)
+{
+	//draw all the possible choices
+	//TODO: simple layout for now
+	int count_w = view_w / card::card_w;
+	auto& choices = sys.card_choices;
+	int selected_cards = 0;
+	card* current_card = nullptr;
+	auto mouse = get_mouse(con);
+	for (size_t i = 0; i < choices.size(); i++)
+	{
+		int card_x = (int)i % count_w;
+		int card_y = (int)i / count_w;
+		auto& c = choices[i].vec->at(choices[i].id);
+		c.render(con, card_x*card::card_w, card_y*card::card_h);
+		if (c.selected)
+			selected_cards++;
+		if (recti(card_x*card::card_w, card_y*card::card_h, card::card_w, card::card_h).is_inside(mouse))
+			current_card = &c;
+	}
+	//handle input
+	if (get_mouse_left())
+	{
+		//figure out where is the mouse (on which card)
+		if (current_card && current_card->selected)//unselect if already selected
+		{
+			current_card->selected = false;
+		}
+		else if(current_card)
+		{
+			if (selected_cards < sys.num_cards_select)
+			{
+				current_card->selected = true;
+			}
+		}
+		//TODO: how to finish selection??
+		
+		
+	}
+	//return selected card list
+	if (get_mouse_right())
+	{
+		for (size_t i = 0; i < choices.size(); i++)
+		{
+			auto& c = choices[i].vec->at(choices[i].id);
+			c.selected = false;
+		}
+		choices.clear();
+		cancel_card_use(sys);
+		sys.gui_state = gui_state::player_turn;
+	}
+	bool finish_selection = selected_cards == sys.num_cards_select;
+	if (finish_selection)
+	{
+		lua_newtable(sys.yielded_L);
+		for (size_t i = 0; i < choices.size(); i++)
+		{
+			auto& c = choices[i].vec->at(choices[i].id);
+			if (c.selected)
+			{
+				lua_push_card_ref(sys.yielded_L, choices[i]);
+				lua_rawseti(sys.yielded_L, -2, (int)i + 1);
+				c.selected = false;
+			}
+		}
+		sys.first_lua_target_function = false;
+		choices.clear();
+		resume_card_use(sys, 1);
+		return;
+	}
+}
 void done_yielded_lua(game_systems& sys)
 {
 	sys.gui_state = gui_state::player_turn;
@@ -1089,6 +1157,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 			anim->player = sys.player;
 			anim->player_wound_hand = sys.hand;
 			anim->damage_to_do = simulated.dmg;
+			anim->wound_card = sys.possible_cards["wound"];
 			anim->start_animation();
 		
 			edata.current_animation = std::move(anim);
@@ -1106,6 +1175,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		edata.current_enemy_changed = true;
 	}
 }
+//////////////////////////////////////////////////////////////////
 int lua_sys_damage(lua_State* L)
 {
 	printf("Called damage!\n");
@@ -1176,6 +1246,23 @@ int lua_sys_raycast(lua_State* L)
 
 	return 1;
 }
+int lua_sys_target_card(lua_State* L)
+{
+	printf("Called target card!\n");
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	luaL_checktype(L, 1, LUA_TTABLE);
+	sys.num_cards_select=luaL_optint(L, 2, 1);
+
+	for (int i = 1; i <= lua_objlen(L, 1); i++)
+	{
+		lua_rawgeti(L, 1, i);
+		sys.card_choices.push_back(lua_tocard_ref(L,-1));
+		lua_pop(L, 1);
+	}
+	sys.gui_state = gui_state::selecting_card;
+
+	return lua_yield(L,0);
+}
 int lua_sys_get_cards(lua_State* L)
 {
 	printf("Called get_cards!\n");
@@ -1209,7 +1296,7 @@ int lua_sys_get_cards(lua_State* L)
 	for (size_t i = 0; i < cards->size(); i++)
 	{
 		//lua_push_card(L, cards[i]);
-		lua_push_card_ref(L,cards,(int)i);
+		lua_push_card_ref(L, card_ref{ cards,(int)i });
 		lua_rawseti(L, -2, (int)i + 1);
 	}
 
@@ -1224,6 +1311,7 @@ void init_lua_system(game_systems& sys)
 	//player interaction function
 	ADD_SYS_COMMAND(target_path);
 	ADD_SYS_COMMAND(target_enemy);
+	ADD_SYS_COMMAND(target_card);
 	//animation functions
 	ADD_SYS_COMMAND(damage);
 	ADD_SYS_COMMAND(move);
@@ -1292,6 +1380,7 @@ void init_lua(game_systems& sys)
 	}
 	lua_load_booster(L,1, sys.possible_cards);
 }
+
 void game_loop(console& graphics_console, console& text_console)
 {
 	auto& window = text_console.get_window();
@@ -1402,6 +1491,8 @@ void game_loop(console& graphics_console, console& text_console)
 			discard.cards.push_back(sys.possible_cards["push"]);
 		end_enemy_turn(sys);
 
+		hand.cards.push_back(sys.possible_cards["wound"]);
+
 		while (!sys.restart && window.isOpen())
 		{
 			// Process events
@@ -1473,35 +1564,19 @@ void game_loop(console& graphics_console, console& text_console)
 			world.render(graphics_console);
 			sys.player->render_gui(graphics_console, 0, 0);
 			//state dep. stuff
-			if(sys.gui_state ==gui_state::player_turn)
+#define HSTATE(x) case gui_state:: x: handle_ ## x(graphics_console,sys); break
+			switch (sys.gui_state)
 			{
-				handle_player_turn(graphics_console, sys);
+				HSTATE(player_turn);
+				HSTATE(exiting);
+				HSTATE(lost);
+				HSTATE(selecting_path);
+				HSTATE(selecting_enemy);
+				HSTATE(animating);
+				HSTATE(enemy_turn);
+				HSTATE(selecting_card);
 			}
-			else if (sys.gui_state == gui_state::exiting)
-			{
-				handle_exiting(graphics_console, sys);
-			}
-			else if (sys.gui_state == gui_state::lost)
-			{
-				handle_lost(graphics_console, sys);
-			}
-			else if (sys.gui_state == gui_state::selecting_path)
-			{
-				handle_selecting_path(graphics_console, sys);
-			}
-			else if (sys.gui_state == gui_state::selecting_enemy)
-			{
-				handle_selecting_enemy(graphics_console, sys);
-			}
-			else if (sys.gui_state == gui_state::animating)
-			{
-				handle_animating(graphics_console, sys);
-			}
-			else if (sys.gui_state == gui_state::enemy_turn)
-			{
-				handle_enemy_turn(graphics_console, sys);
-			}
-			
+#undef HSTATE
 			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 
 			//draw_asciimap(graphics_console);

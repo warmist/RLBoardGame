@@ -44,7 +44,9 @@ void card::render(console & c, int x, int y)
 		border_color = { 0.57f, 0.44f, 0.07f };
 	else if (type == card_type::wound)
 		border_color = { 0.76f, 0.04f, 0.01f };
-
+	v3f back_color = v3f(0, 0, 0);
+	if (selected)
+		back_color = v3f(0.4f, 0.4f, 0.4f);
 	/*
 	const int h = 20;
 	const int w = int(h*phi);
@@ -52,21 +54,21 @@ void card::render(console & c, int x, int y)
 	const int w = card_w;
 	const int h = card_h;
 
-	c.draw_box(recti(x, y, w, h), true, border_color);
+	c.draw_box(recti(x, y, w, h), true, border_color, back_color);
 
 	const int text_start = int(w / 2 - name.length() / 2);
-	c.set_text(v2i(x + text_start, y), name);
-	c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color);
-	c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
+	c.set_text(v2i(x + text_start, y), name, v3f(1,1,1),back_color);
+	c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color, back_color);
+	c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color, back_color);
 	int cur_y = y + 1;
 	if (type != card_type::wound) //TODO: replace with "usable" flag?
 	{
-		c.set_text(v2i(x + 2, cur_y), "Cost");
+		c.set_text(v2i(x + 2, cur_y), "Cost",v3f(1,1,1),back_color);
 		for (int i = 0; i<cost_ap; i++)
-			c.set_char(v2i(x + card::card_w - cost_ap + i - 2, cur_y), (unsigned char)'\xad', get_ap_color());
+			c.set_char(v2i(x + card::card_w - cost_ap + i - 2, cur_y), (unsigned char)'\xad', get_ap_color(), back_color);
 		cur_y++;
 	}
-	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc);
+	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc, v3f(1, 1, 1), back_color);
 }
 #include "lua_helper.hpp"
 lua_State* card::yieldable_use(lua_State* L)
@@ -134,10 +136,13 @@ void lua_load_card(lua_State* L, int arg, card& output)
 		output.type = card_type::generated;
 	lua_pop(L, 1);
 
+	lua_getfield(L, p, "wound");
+	bool is_wound = lua_toboolean(L, -1);
+	if (is_wound)
+		output.type = card_type::wound;
+	lua_pop(L, 1);
 
-	//TODO: read tags
-	//		use tags for card needs
-	//		use tags for display too?
+	
 	lua_pop(L, 1);//pop copy of card
 }
 void lua_load_booster(lua_State * L,int arg,lua_booster& output)
@@ -158,22 +163,29 @@ void lua_load_booster(lua_State * L,int arg,lua_booster& output)
 	}
 	lua_pop(L, 1);//pop 
 }
+card_ref lua_tocard_ref(lua_State* L, int arg)
+{
+	lua_rawgeti(L, arg, 1);
+	auto vector = reinterpret_cast<std::vector<card>*>(lua_touserdata(L, -1));
+	lua_pop(L, 1);
+	lua_rawgeti(L, arg, 2);
+	int id = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return card_ref{ vector,id };
+}
 int lua_card_ref_tostring(lua_State* L)
 {
-	lua_rawgeti(L, 1, 1);
-	auto vector = reinterpret_cast<std::vector<card>*>(lua_touserdata(L,-1));
-	lua_rawgeti(L, 1, 2);
-	int id = (int)lua_tointeger(L, -1);
-	lua_pushfstring(L, "card<%p %d>: %s",vector,id,vector->at(id).name.c_str());
+	auto ref = lua_tocard_ref(L, 1);
+	lua_pushfstring(L, "card<%p %d>: %s",ref.vec,ref.id,ref.vec->at(ref.id).name.c_str());
 	return 1;
 }
-void lua_push_card_ref(lua_State * L, std::vector<card>* vec, int id)
+void lua_push_card_ref(lua_State * L, const card_ref& r)
 {
 	lua_newtable(L);
 
-	lua_pushlightuserdata(L, vec);
+	lua_pushlightuserdata(L, r.vec);
 	lua_rawseti(L, -2, 1);
-	lua_pushinteger(L, id);
+	lua_pushinteger(L, r.id);
 	lua_rawseti(L, -2, 2);
 
 	if (luaL_newmetatable(L, "card.ref"))

@@ -53,13 +53,14 @@ struct card
 	//actual function is in lua
 	lua_State* yieldable_use(lua_State* L);
 	//POST_USE
-	card_fate after_use = card_fate::destroy;
+	card_fate after_use = card_fate::discard;
 
 
 	bool is_warn_ap = false;
 	sf::Clock warn_ap;
 
 	v3f get_ap_color();
+	bool selected = false;
 	void render(console& c, int x, int y);
 };
 
@@ -67,5 +68,11 @@ struct card
 using lua_booster = std::unordered_map<std::string, card>;
 
 void lua_load_booster(lua_State* L,int arg,lua_booster& output);
-
-void lua_push_card_ref(lua_State* L, std::vector<card>* vec, int id);
+//TODO: ugh ugly ref stuff. Should probably make cards pointers and then moving them would be easier
+struct card_ref
+{
+	std::vector<card>* vec;
+	int id;
+};
+void lua_push_card_ref(lua_State* L, const card_ref& r);
+card_ref lua_tocard_ref(lua_State* L, int arg);
