@@ -173,6 +173,18 @@ card_ref lua_tocard_ref(lua_State* L, int arg)
 	lua_pop(L, 1);
 	return card_ref{ vector,id };
 }
+card_ref lua_check_card_ref(lua_State * L, int arg)
+{
+	if (lua_getmetatable(L, arg)) {  /* does it have a metatable? */
+		lua_getfield(L, LUA_REGISTRYINDEX, "card.ref");  /* get correct metatable */
+		if (lua_rawequal(L, -1, -2)) {  /* does it have the correct mt? */
+			lua_pop(L, 2);  /* remove both metatables */
+			return lua_tocard_ref(L,arg);
+		}
+	}
+	luaL_typerror(L, arg, "card.ref");  /* else error */
+	return card_ref();
+}
 int lua_card_ref_tostring(lua_State* L)
 {
 	auto ref = lua_tocard_ref(L, 1);
@@ -194,6 +206,19 @@ void lua_push_card_ref(lua_State * L, const card_ref& r)
 		lua_pushcfunction(L, lua_card_ref_tostring);
 		lua_setfield(L, -2, "__tostring");
 
+		//constructed by sys init due to ... reasons
+		lua_getfield(L, LUA_REGISTRYINDEX, "_card_moves");
+		lua_pushnil(L);
+		while (lua_next(L, -2))
+		{
+			printf("Adding...\n");
+			lua_pushvalue(L, -2);
+			lua_insert(L, -2);
+			lua_settable(L, -5);
+		}
+		lua_pop(L, 1);
+
+		//FIXME: actually hide the values inside the table... Prob. should just use the userdata way either way...
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
 	}

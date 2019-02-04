@@ -343,7 +343,7 @@ struct card_deck
 struct card_hand
 {
 	std::vector<card> cards;
-	int selected_card=-1;
+	int selected_card=-1; //FIXME: bad idea prob...
 	int hand_gui_y;
 	v2i get_card_extents(int y,int card_no)
 	{
@@ -599,6 +599,7 @@ struct game_systems
 
 	int num_cards_select;
 	std::vector<card_ref> card_choices;
+	std::vector<card_change_ref> card_state_changes;
 	//
 	card_hand* hand;
 
@@ -924,6 +925,7 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 }
 void handle_selecting_card(console& con, game_systems& sys)
 {
+	assert(sys.num_cards_select == 1);//FIXME: works for only one card selected... for now see below
 	//draw all the possible choices
 	//TODO: simple layout for now
 	int count_w = view_w / card::card_w;
@@ -946,20 +948,21 @@ void handle_selecting_card(console& con, game_systems& sys)
 	if (get_mouse_left())
 	{
 		//figure out where is the mouse (on which card)
+		/* FIXME: this blinks the card too much (each frame). Figure out how to avoid that. 
+			Works because if you are selecting one card you don't need highlight/deselect functions
 		if (current_card && current_card->selected)//unselect if already selected
 		{
 			current_card->selected = false;
 		}
-		else if(current_card)
+		else */
+			if(current_card)
 		{
 			if (selected_cards < sys.num_cards_select)
 			{
 				current_card->selected = true;
 			}
 		}
-		//TODO: how to finish selection??
-		
-		
+	
 	}
 	//return selected card list
 	if (get_mouse_right())
@@ -977,13 +980,14 @@ void handle_selecting_card(console& con, game_systems& sys)
 	if (finish_selection)
 	{
 		lua_newtable(sys.yielded_L);
+		int num_exported = 0;
 		for (size_t i = 0; i < choices.size(); i++)
 		{
 			auto& c = choices[i].vec->at(choices[i].id);
 			if (c.selected)
 			{
 				lua_push_card_ref(sys.yielded_L, choices[i]);
-				lua_rawseti(sys.yielded_L, -2, (int)i + 1);
+				lua_rawseti(sys.yielded_L, -2, ++num_exported);
 				c.selected = false;
 			}
 		}
@@ -1011,7 +1015,64 @@ void cancel_card_use(game_systems& sys)
 	done_yielded_lua(sys);
 	finish_card_use(sys, soft_cancel);
 }
+void apply_card_state_changes(game_systems& sys)
+{
+	auto& v = sys.card_state_changes;
 
+	if (v.size() == 0)
+		return; //yay nothing to do !
+
+	//	first need to sort stuff because of destruction order
+	std::sort(v.begin(), v.end(), [](const card_change_ref& a,const card_change_ref& b)
+	{ return a.vec<b.vec || (!(a.vec<b.vec) && a.id<b.id);
+	});
+	//remove dupplicates
+	v.erase(std::unique(v.begin(), v.end(), [](const card_change_ref& a, const card_change_ref& b) {return a.vec == b.vec && a.id == b.id; }), v.end());
+	//do copies of all changes except destroy.
+	std::vector<std::pair<card,card_state_change>> removals;
+	for (auto& s : v)
+	{
+		if (s.new_state != card_state_change::destroy)
+			removals.emplace_back(s.vec->at(s.id),s.new_state);
+	}
+	//destroy all the stuff because next some inserts might invalidate refs
+	for (int i = (int)v.size() - 1; i >= 0; i--)
+	{
+		auto& ref = v[i];
+		ref.vec->erase(ref.vec->begin() + ref.id);
+	}
+	//now iterate over the copies and reinsert them into the correct place
+	for (auto& c : removals)
+	{
+		switch (c.second)
+		{
+		case card_state_change::destroy:
+			//should not happen
+			assert(false);
+			break;
+		case card_state_change::discard:
+			sys.discard->cards.push_back(c.first);
+			break;
+		case card_state_change::draw_pile_bottom:
+			sys.deck->cards.insert(sys.deck->cards.end(), c.first);
+			break;
+		case card_state_change::hand:
+			sys.hand->cards.push_back(c.first);
+			break;
+		case card_state_change::draw_pile_top:
+			sys.deck->cards.insert(sys.deck->cards.begin(), c.first);
+			break;
+		case card_state_change::draw_pile_rand:
+			//FIXME: bad rand use here
+			sys.deck->cards.insert(sys.deck->cards.begin() + rand() % sys.deck->cards.size(), c.first);
+			break;
+		default:
+			break;
+		}
+	}
+	//finally clear it for the future generations
+	v.clear();
+}
 void finish_card_use(game_systems& sys,bool soft_cancel)
 {
 	auto& hand = *sys.hand;
@@ -1025,42 +1086,7 @@ void finish_card_use(game_systems& sys,bool soft_cancel)
 	{
 		sys.player->current_ap -= card.cost_ap;
 	}
-	auto ret = (soft_cancel)?(card_fate::hand):(card.after_use);
-	switch (ret)
-	{
-	case card_fate::destroy:
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::discard:
-		sys.discard->cards.push_back(card);
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::hand:
-		//do nothing?
-		break;
-	case card_fate::draw_pile_top:
-		sys.deck->cards.insert(sys.deck->cards.begin(), card);
-
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::draw_pile_rand:
-		sys.deck->cards.insert(sys.deck->cards.begin() + rand() % sys.deck->cards.size(), card);
-
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	case card_fate::draw_pile_bottom:
-		sys.deck->cards.insert(sys.deck->cards.end(), card);
-
-		hand.cards.erase(hand.cards.begin() + hand.selected_card);
-		hand.selected_card = -1;
-		break;
-	default:
-		break;
-	}
+	apply_card_state_changes(sys);
 }
 void handle_animating(console& con, game_systems& sys)
 {
@@ -1176,6 +1202,39 @@ void handle_enemy_turn(console& con, game_systems& sys)
 	}
 }
 //////////////////////////////////////////////////////////////////
+int lua_card_mark_for_state_change(lua_State* L) 
+{
+	//Grr... should be in cards but they don't know the game_system stuff
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	int remove_type = (int)lua_tointeger(L, lua_upvalueindex(2));
+	
+	card_ref ref = lua_check_card_ref(L, 1);
+	card_change_ref cref;
+
+	cref.id = ref.id;
+	cref.vec = ref.vec;
+
+	cref.new_state = (card_state_change)remove_type;
+	sys.card_state_changes.push_back(cref);
+	return 0;
+}
+void init_card_moves(game_systems& sys)
+{
+	lua_State* L = sys.L;
+	lua_newtable(L);
+#define ADD_MOVE_MODE(x) lua_pushlightuserdata(L, &sys);\
+		lua_pushnumber(L,(int)(card_state_change::  x));\
+		lua_pushcclosure(L, lua_card_mark_for_state_change, 2);\
+		lua_setfield(L,-2,#x)
+	ADD_MOVE_MODE(destroy);
+	ADD_MOVE_MODE(discard);
+	ADD_MOVE_MODE(hand);
+	ADD_MOVE_MODE(draw_pile_top);
+	ADD_MOVE_MODE(draw_pile_rand);
+	ADD_MOVE_MODE(draw_pile_bottom);
+#undef ADD_MOVE_MODE
+	lua_setfield(L, LUA_REGISTRYINDEX, "_card_moves");
+}
 int lua_sys_damage(lua_State* L)
 {
 	printf("Called damage!\n");
@@ -1302,6 +1361,7 @@ int lua_sys_get_cards(lua_State* L)
 
 	return 1;
 }
+
 #define ADD_SYS_COMMAND(name) lua_pushlightuserdata(L, &sys);lua_pushcclosure(L, lua_sys_## name, 1); lua_setfield(L, -2, # name)
 void init_lua_system(game_systems& sys)
 {
@@ -1351,11 +1411,11 @@ void init_lua(game_systems& sys)
 	auto L = sys.L;
 	lua_stack_guard g(L);
 	luaL_openlibs(L);
-
+	//hook exceptions (luajit thing)
 	lua_pushlightuserdata(L, (void *)wrap_exceptions);
 	luaJIT_setmode(L, -1, LUAJIT_MODE_WRAPCFUNC | LUAJIT_MODE_ON);
 	lua_pop(L, 1);
-
+	//init vector library
 	if (luaL_loadbuffer(L, EMB_FILE_vector_lib, EMB_FILE_SIZE_vector_lib, "vector library") != 0)
 	{
 		printf("Lua load error:%s", lua_tostring(L, -1));
@@ -1368,9 +1428,10 @@ void init_lua(game_systems& sys)
 	}
 	lua_setfield(L, LUA_REGISTRYINDEX, "vec2");
 	lua_setfield(L, LUA_REGISTRYINDEX, "vec3");
-
+	//my own systems
 	init_lua_system(sys);
-	
+	init_card_moves(sys);
+	//load the cards
 	string path = asset_path + "/booster_starter.lua";
 	luaL_loadfile(L, path.c_str());
 	if (lua_safecall(L,0,LUA_MULTRET) != 0)

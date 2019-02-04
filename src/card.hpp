@@ -7,7 +7,7 @@ enum class card_type
 	generated,
 	wound,
 };
-enum class card_fate
+enum class card_state_change
 {
 	destroy, //as in - no longer in game
 	discard, //put in the discard pile
@@ -15,7 +15,6 @@ enum class card_fate
 	draw_pile_top, //top of the draw pile
 	draw_pile_rand, //somewhere in the pile
 	draw_pile_bottom,
-	//etc...
 };
 
 struct card_needs_output
@@ -52,8 +51,6 @@ struct card
 	//USE
 	//actual function is in lua
 	lua_State* yieldable_use(lua_State* L);
-	//POST_USE
-	card_fate after_use = card_fate::discard;
 
 
 	bool is_warn_ap = false;
@@ -76,3 +73,8 @@ struct card_ref
 };
 void lua_push_card_ref(lua_State* L, const card_ref& r);
 card_ref lua_tocard_ref(lua_State* L, int arg);
+card_ref lua_check_card_ref(lua_State* L, int arg);
+struct card_change_ref:public card_ref
+{
+	card_state_change new_state;
+};

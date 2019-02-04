@@ -16,6 +16,7 @@ deck.strike={
 	use=function ( card,game )
 		local target=game.target_enemy(game.player:pos(),card.range)
 		game.damage(target,card.attack)
+		card:discard()
 	end
 }
 deck.push={
@@ -49,6 +50,7 @@ deck.push={
 		if #path<card.distance-1 then
 			game.damage(target,card.attack)
 		end
+		card:discard()
 	end
 }
 deck.move={
@@ -70,7 +72,7 @@ deck.move={
 		end
 		local path=game.target_path(game.player:pos(),card.range)
 		game.move(game.player,path)
-		return "destroy"
+		card:destroy()
 	end
 }
 deck.wound={
@@ -79,7 +81,7 @@ deck.wound={
 	wound=true,
 	use=function ( card,game )
 		local cards=game.get_cards(2)
-		--[[
+		--[[ TODO: need card_ref comparisons
 		local tmp_cards={}
 		for i,v in ipairs(cards) do
 			if not v.wound then
@@ -88,11 +90,19 @@ deck.wound={
 		end
 		--]]
 		local tmp_cards=cards
+
 		local card_choice=game.target_card(tmp_cards)
-		
+		print(card_choice)
+		for i,v in ipairs(card_choice) do
+			print(i,v)
+		end
+
+		for i,v in pairs(getmetatable(card_choice[1])) do
+			print(i,v)
+		end
 		card_choice[1]:destroy()
 
-		return "destroy"
+		card:destroy()
 	end
 }
 return deck
