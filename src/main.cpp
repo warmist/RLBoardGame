@@ -650,12 +650,38 @@ void resume_card_use(game_systems& sys, int args_pushed = 0)
 		assert(false);
 	}
 }
+card_ref find_the_card(game_systems& g, card& c)
+{
+	//TODO: probably a stopgap measure. Need normal card references and back pointers?
+	for (size_t i = 0; i < g.hand->cards.size(); i++)
+	{
+		if (&g.hand->cards[i] == &c)
+		{
+			return card_ref{ &g.hand->cards,(int)i };
+		}
+	}
+	for (size_t i = 0; i < g.deck->cards.size(); i++)
+	{
+		if (&g.deck->cards[i] == &c)
+		{
+			return card_ref{ &g.deck->cards,(int)i };
+		}
+	}
+	for (size_t i = 0; i < g.discard->cards.size(); i++)
+	{
+		if (&g.discard->cards[i] == &c)
+		{
+			return card_ref{ &g.discard->cards,(int)i };
+		}
+	}
+	//oh noes! where is the card!?
+	assert(false);
+	return card_ref{ nullptr,0 };
+}
 void use_card_actual(card& card, game_systems& g)
 {
-	auto& hand = *g.hand;
-
 	g.first_lua_target_function = true; //reset "first target func" condition
-	g.yielded_L = card.yieldable_use(g.L);
+	g.yielded_L = card.yieldable_use(g.L,find_the_card(g,card));
 	g.coroutine_ref=luaL_ref(g.L, LUA_REGISTRYINDEX);
 
 	resume_card_use(g,2);

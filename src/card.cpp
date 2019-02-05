@@ -71,7 +71,7 @@ void card::render(console & c, int x, int y)
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc, v3f(1, 1, 1), back_color);
 }
 #include "lua_helper.hpp"
-lua_State* card::yieldable_use(lua_State* L)
+lua_State* card::yieldable_use(lua_State* L,card_ref this_card_ref)
 {
 	lua_stack_guard g(L,1);
 	//start a lua coroutine. 
@@ -202,6 +202,10 @@ void lua_push_card_ref(lua_State * L, const card_ref& r)
 
 	if (luaL_newmetatable(L, "card.ref"))
 	{
+		//ideal inheritance:
+		//	card.ref
+		//	card data table
+		//	card class data table (i.e. from the luafile)
 		//TODO: unfinished
 		lua_pushcfunction(L, lua_card_ref_tostring);
 		lua_setfield(L, -2, "__tostring");

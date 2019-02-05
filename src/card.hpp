@@ -25,6 +25,12 @@ struct card_needs_output
 struct console;
 struct lua_State;
 constexpr float phi = 1.61803398874989484820f;
+//TODO: ugh ugly ref stuff. Should probably make cards pointers and then moving them would be easier
+struct card_ref
+{
+	std::vector<card>* vec;
+	int id;
+};
 struct card
 {
 	static const int card_w = 15;
@@ -50,7 +56,7 @@ struct card
 	int cost_ap = 0;
 	//USE
 	//actual function is in lua
-	lua_State* yieldable_use(lua_State* L);
+	lua_State* yieldable_use(lua_State* L,card_ref this_card_ref);
 
 
 	bool is_warn_ap = false;
@@ -65,12 +71,7 @@ struct card
 using lua_booster = std::unordered_map<std::string, card>;
 
 void lua_load_booster(lua_State* L,int arg,lua_booster& output);
-//TODO: ugh ugly ref stuff. Should probably make cards pointers and then moving them would be easier
-struct card_ref
-{
-	std::vector<card>* vec;
-	int id;
-};
+
 void lua_push_card_ref(lua_State* L, const card_ref& r);
 card_ref lua_tocard_ref(lua_State* L, int arg);
 card_ref lua_check_card_ref(lua_State* L, int arg);
