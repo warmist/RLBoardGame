@@ -261,10 +261,11 @@ struct anim_unit_walk :public anim
 };
 
 #include "card.hpp"
-
+template<card_state S>
 struct card_deck
 {
-	std::vector<card> cards;
+	card_vector<S> cards;
+
 	int x, y;
 	std::string text;
 	bool is_selected = false;
@@ -294,16 +295,6 @@ struct card_deck
 		else
 			is_selected = false;
 	}
-	int count_wounds()
-	{
-		int ret = 0;
-		for (auto& c : cards)
-		{
-			if (c.type == card_type::wound)
-				ret++;
-		}
-		return ret;
-	}
 	void render(console& c)
 	{
 		v3f border_color = v3f(1, 1, 1);
@@ -320,7 +311,7 @@ struct card_deck
 		c.set_char(v2i(x + text_start + int(text.length()), y), tile_nse_t_double, border_color);
 		c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color);
 
-		int wounds = count_wounds();
+		int wounds = cards.count_wounds();
 
 		const int buffer_size = 12;
 		char buffer[buffer_size];
@@ -342,7 +333,8 @@ struct card_deck
 };
 struct card_hand
 {
-	std::vector<card> cards;
+	card_vector<card_state::hand> cards;
+
 	int selected_card=-1; //FIXME: bad idea prob...
 	int hand_gui_y;
 	v2i get_card_extents(int y,int card_no)
@@ -394,18 +386,20 @@ struct card_hand
 		//still somehow need to ensure that there is not more than view_w cards as then you could not select a card :|
 		for (int i = int(cards.size()) - 1; i >= 0; i--)
 		{
+			auto& card = cards[i];
 			auto p = get_card_extents(hand_gui_y, i);
 			if (i == selected_card)
 			{
 				//skip this card as we are going to draw it last
 			}
 			else
-				cards[i].render(c, p.x, p.y);
+				card.render(c, p.x, p.y);
 		}
 		if (selected_card >= 0 && selected_card < cards.size())
 		{
 			auto p = get_card_extents(hand_gui_y, selected_card);
-			cards[selected_card].render(c, p.x, view_h - card::card_h);
+			auto& card = cards[selected_card];
+			card.render(c, p.x, view_h - card::card_h);
 		}
 	}
 };
@@ -414,6 +408,7 @@ struct anim_player_damage :public anim
 {
 	entity* player;
 	card_hand* player_wound_hand;
+	lua_State* L; 
 	int damage_to_do;
 	card wound_card;
 
@@ -445,8 +440,9 @@ struct anim_player_damage :public anim
 		}
 		if (tween_step == tween_frames - 1)
 		{
-			
-			player_wound_hand->cards.push_back(wound_card);
+			//TODO: NEED LUA HERE!
+			auto id = player_wound_hand->cards.r->new_card(wound_card,L);
+			player_wound_hand->cards.push_back(id);
 		}
 	}
 };
@@ -601,10 +597,12 @@ struct game_systems
 	std::vector<card_ref> card_choices;
 	std::vector<card_change_ref> card_state_changes;
 	//
+	card_registry all_cards;
+
 	card_hand* hand;
 
-	card_deck* deck;
-	card_deck* discard;
+	card_deck<card_state::draw_pile>* deck;
+	card_deck<card_state::discard>* discard;
 
 	bool first_lua_target_function;
 	//lua stuff
@@ -650,38 +648,10 @@ void resume_card_use(game_systems& sys, int args_pushed = 0)
 		assert(false);
 	}
 }
-card_ref find_the_card(game_systems& g, card& c)
-{
-	//TODO: probably a stopgap measure. Need normal card references and back pointers?
-	for (size_t i = 0; i < g.hand->cards.size(); i++)
-	{
-		if (&g.hand->cards[i] == &c)
-		{
-			return card_ref{ &g.hand->cards,(int)i };
-		}
-	}
-	for (size_t i = 0; i < g.deck->cards.size(); i++)
-	{
-		if (&g.deck->cards[i] == &c)
-		{
-			return card_ref{ &g.deck->cards,(int)i };
-		}
-	}
-	for (size_t i = 0; i < g.discard->cards.size(); i++)
-	{
-		if (&g.discard->cards[i] == &c)
-		{
-			return card_ref{ &g.discard->cards,(int)i };
-		}
-	}
-	//oh noes! where is the card!?
-	assert(false);
-	return card_ref{ nullptr,0 };
-}
 void use_card_actual(card& card, game_systems& g)
 {
 	g.first_lua_target_function = true; //reset "first target func" condition
-	g.yielded_L = card.yieldable_use(g.L,find_the_card(g,card));
+	g.yielded_L = card.yieldable_use(g.L);
 	g.coroutine_ref=luaL_ref(g.L, LUA_REGISTRYINDEX);
 
 	resume_card_use(g,2);
@@ -763,13 +733,12 @@ bool draw_card(game_systems& sys)
 			return false;
 		else
 		{
-			std::shuffle(discard.begin(), discard.end(),sys.rand);
-			deck.insert(deck.end(), discard.begin(), discard.end());
-			discard.clear();
+			std::shuffle(discard.ids.begin(), discard.ids.end(),sys.rand);
+			deck.append(discard);
 		}
 	}
-	auto card = deck.front();
-	pop_front(deck);
+	auto card = deck.ids.front();
+	pop_front(deck.ids);
 	hand.push_back(card);
 	return true;
 }
@@ -784,8 +753,7 @@ void end_enemy_turn(game_systems& sys)
 	auto& hand = sys.hand->cards;
 	auto& discard = sys.discard->cards;
 	//mix in the wounds
-	discard.insert(discard.end(), hand.begin(), hand.end());
-	hand.clear();
+	discard.append(hand);
 	//draw new cards
 	const int hand_draw_count = 5;
 	const int hand_max_count = 7;
@@ -798,8 +766,9 @@ void end_enemy_turn(game_systems& sys)
 		draw_card(sys);
 	}
 	//add generated cards
-
-	hand.push_back(sys.possible_cards["move"]);
+	//FIXME: might be yielded L here? probably not but still
+	auto id=sys.all_cards.new_card(sys.possible_cards["move"],sys.L);
+	hand.push_back(id);
 }
 void end_player_turn(game_systems& sys)
 {
@@ -807,17 +776,13 @@ void end_player_turn(game_systems& sys)
 	auto& dis = sys.discard->cards;
 	auto& hand = sys.hand->cards;
 	int count_wound = 0;
-	for (auto& c : hand)
-	{
-		if (c.type == card_type::wound)
-			count_wound++;
-	}
+
+	int wound_count = hand.count_wounds();
 	if (count_wound >= 3)
 	{
 		sys.gui_state = gui_state::lost;
 	}
-	dis.insert(dis.end(), hand.begin(), hand.end());
-	hand.clear();
+	dis.append(hand);
 	remove_dead_enemies(sys);
 }
 void handle_player_turn(console& con,game_systems& sys)
@@ -963,7 +928,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 	{
 		int card_x = (int)i % count_w;
 		int card_y = (int)i / count_w;
-		auto& c = choices[i].vec->at(choices[i].id);
+		auto& c = sys.all_cards.cards[choices[i]];
 		c.render(con, card_x*card::card_w, card_y*card::card_h);
 		if (c.selected)
 			selected_cards++;
@@ -995,7 +960,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 	{
 		for (size_t i = 0; i < choices.size(); i++)
 		{
-			auto& c = choices[i].vec->at(choices[i].id);
+			auto& c = sys.all_cards.cards[choices[i]];
 			c.selected = false;
 		}
 		choices.clear();
@@ -1009,7 +974,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 		int num_exported = 0;
 		for (size_t i = 0; i < choices.size(); i++)
 		{
-			auto& c = choices[i].vec->at(choices[i].id);
+			auto& c = sys.all_cards.cards[choices[i]];
 			if (c.selected)
 			{
 				lua_push_card_ref(sys.yielded_L, choices[i]);
@@ -1048,49 +1013,51 @@ void apply_card_state_changes(game_systems& sys)
 	if (v.size() == 0)
 		return; //yay nothing to do !
 
-	//	first need to sort stuff because of destruction order
+	//	first need to sort stuff because remove duplicates
 	std::sort(v.begin(), v.end(), [](const card_change_ref& a,const card_change_ref& b)
-	{ return a.vec<b.vec || (!(a.vec<b.vec) && a.id<b.id);
-	});
+	{ return a.id<b.id;});
 	//remove dupplicates
-	v.erase(std::unique(v.begin(), v.end(), [](const card_change_ref& a, const card_change_ref& b) {return a.vec == b.vec && a.id == b.id; }), v.end());
-	//do copies of all changes except destroy.
-	std::vector<std::pair<card,card_state_change>> removals;
-	for (auto& s : v)
-	{
-		if (s.new_state != card_state_change::destroy)
-			removals.emplace_back(s.vec->at(s.id),s.new_state);
-	}
-	//destroy all the stuff because next some inserts might invalidate refs
-	for (int i = (int)v.size() - 1; i >= 0; i--)
-	{
-		auto& ref = v[i];
-		ref.vec->erase(ref.vec->begin() + ref.id);
-	}
+	v.erase(std::unique(v.begin(), v.end(), [](const card_change_ref& a, const card_change_ref& b) {return a.id == b.id; }), v.end());
 	//now iterate over the copies and reinsert them into the correct place
-	for (auto& c : removals)
+	for (auto& c : v)
 	{
-		switch (c.second)
+		auto& card = sys.all_cards.cards[c.id];
+		switch (card.current_state)
+		{
+		case card_state::proto:
+		case card_state::destroyed:
+			assert(false);//should not happen
+			break;
+		case card_state::discard:
+			sys.discard->cards.remove_card(c.id);
+			break;
+		case card_state::draw_pile:
+			sys.deck->cards.remove_card(c.id);
+			break;
+		case card_state::hand:
+			sys.hand->cards.remove_card(c.id);
+			break;
+		}
+
+		switch (c.new_state)
 		{
 		case card_state_change::destroy:
-			//should not happen
-			assert(false);
+			sys.all_cards.unreg_card(c.id,sys.L);
 			break;
 		case card_state_change::discard:
-			sys.discard->cards.push_back(c.first);
+			sys.discard->cards.push_back(c.id);
 			break;
 		case card_state_change::draw_pile_bottom:
-			sys.deck->cards.insert(sys.deck->cards.end(), c.first);
+			sys.deck->cards.push_back(c.id);
 			break;
 		case card_state_change::hand:
-			sys.hand->cards.push_back(c.first);
+			sys.hand->cards.push_back(c.id);
 			break;
 		case card_state_change::draw_pile_top:
-			sys.deck->cards.insert(sys.deck->cards.begin(), c.first);
+			sys.deck->cards.push_top(c.id);
 			break;
 		case card_state_change::draw_pile_rand:
-			//FIXME: bad rand use here
-			sys.deck->cards.insert(sys.deck->cards.begin() + rand() % sys.deck->cards.size(), c.first);
+			sys.deck->cards.push_rand(c.id, sys.rand);
 			break;
 		default:
 			break;
@@ -1210,6 +1177,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 			anim->player_wound_hand = sys.hand;
 			anim->damage_to_do = simulated.dmg;
 			anim->wound_card = sys.possible_cards["wound"];
+			anim->L = sys.L;
 			anim->start_animation();
 		
 			edata.current_animation = std::move(anim);
@@ -1237,8 +1205,7 @@ int lua_card_mark_for_state_change(lua_State* L)
 	card_ref ref = lua_check_card_ref(L, 1);
 	card_change_ref cref;
 
-	cref.id = ref.id;
-	cref.vec = ref.vec;
+	cref.id = ref;
 
 	cref.new_state = (card_state_change)remove_type;
 	sys.card_state_changes.push_back(cref);
@@ -1359,17 +1326,18 @@ int lua_sys_get_cards(lua_State* L)
 		luaL_error(L, "Invalid location: %d, supported: 1,2,3",card_location);
 		return 0;
 	}
-	std::vector<card>* cards;
+	std::vector<int>* cards;
+	
 	switch (card_location)
 	{
 	case 1:
-		cards = &sys.deck->cards;
+		cards = &sys.deck->cards.ids;
 		break;
 	case 2:
-		cards = &sys.hand->cards;
+		cards = &sys.hand->cards.ids;
 		break;
 	case 3:
-		cards = &sys.discard->cards;
+		cards = &sys.discard->cards.ids;
 		break;
 	default:
 		luaL_error(L, "Reached an unreachable part! get_cards");
@@ -1380,8 +1348,7 @@ int lua_sys_get_cards(lua_State* L)
 
 	for (size_t i = 0; i < cards->size(); i++)
 	{
-		//lua_push_card(L, cards[i]);
-		lua_push_card_ref(L, card_ref{ cards,(int)i });
+		lua_push_card_ref(L, cards->at(i));
 		lua_rawseti(L, -2, (int)i + 1);
 	}
 
@@ -1485,14 +1452,17 @@ void game_loop(console& graphics_console, console& text_console)
 		state current_state = states.data["game_start"];
 
 		card_hand hand;
+		hand.cards.r= &sys.all_cards;
 		hand.hand_gui_y = view_h - 8;
 
-		card_deck deck;
+		card_deck<card_state::draw_pile> deck;
+		deck.cards.r = &sys.all_cards;
 		deck.y = view_h - card::card_h - 10;
 		deck.x =  -card::card_w+3;
 		deck.text = "Deck";
 
-		card_deck discard;
+		card_deck<card_state::discard> discard;
+		discard.cards.r = &sys.all_cards;
 		discard.y = view_h - card::card_h - 10;
 		discard.x = view_w - card::card_w /4;
 		discard.text = "Discard";
@@ -1573,13 +1543,20 @@ void game_loop(console& graphics_console, console& text_console)
 
 
 		for (int i = 0; i<15; i++)
-			discard.cards.push_back(sys.possible_cards["strike"]);
+		{
+			auto id = sys.all_cards.new_card(sys.possible_cards["strike"], sys.L);
+			discard.cards.push_back(id);
+		}
 		for (int i = 0; i<8; i++)
-			discard.cards.push_back(sys.possible_cards["push"]);
+		{
+			auto id = sys.all_cards.new_card(sys.possible_cards["push"], sys.L);
+			discard.cards.push_back(id);
+		}
 		end_enemy_turn(sys);
-
-		hand.cards.push_back(sys.possible_cards["wound"]);
-
+		{
+			auto id = sys.all_cards.new_card(sys.possible_cards["strike"], sys.L);
+			hand.cards.push_back(id);
+		}
 		while (!sys.restart && window.isOpen())
 		{
 			// Process events

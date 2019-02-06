@@ -71,7 +71,7 @@ void card::render(console & c, int x, int y)
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc, v3f(1, 1, 1), back_color);
 }
 #include "lua_helper.hpp"
-lua_State* card::yieldable_use(lua_State* L,card_ref this_card_ref)
+lua_State* card::yieldable_use(lua_State* L)
 {
 	lua_stack_guard g(L,1);
 	//start a lua coroutine. 
@@ -165,13 +165,11 @@ void lua_load_booster(lua_State * L,int arg,lua_booster& output)
 }
 card_ref lua_tocard_ref(lua_State* L, int arg)
 {
+	
 	lua_rawgeti(L, arg, 1);
-	auto vector = reinterpret_cast<std::vector<card>*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	lua_rawgeti(L, arg, 2);
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
-	return card_ref{ vector,id };
+	return card_ref{ id };
 }
 card_ref lua_check_card_ref(lua_State * L, int arg)
 {
@@ -188,17 +186,15 @@ card_ref lua_check_card_ref(lua_State * L, int arg)
 int lua_card_ref_tostring(lua_State* L)
 {
 	auto ref = lua_tocard_ref(L, 1);
-	lua_pushfstring(L, "card<%p %d>: %s",ref.vec,ref.id,ref.vec->at(ref.id).name.c_str());
+	lua_pushfstring(L, "card<%d>",ref);//TODO:return this string because more understandable. Maybe a global/registry value? ref.vec->at(ref.id).name.c_str()
 	return 1;
 }
 void lua_push_card_ref(lua_State * L, const card_ref& r)
 {
 	lua_newtable(L);
 
-	lua_pushlightuserdata(L, r.vec);
+	lua_pushinteger(L, r);
 	lua_rawseti(L, -2, 1);
-	lua_pushinteger(L, r.id);
-	lua_rawseti(L, -2, 2);
 
 	if (luaL_newmetatable(L, "card.ref"))
 	{
@@ -227,4 +223,20 @@ void lua_push_card_ref(lua_State * L, const card_ref& r)
 		lua_setfield(L, -2, "__index");
 	}
 	lua_setmetatable(L, -2);
+}
+
+int card_registry::new_card(const card & proto, lua_State* L)
+{
+	auto& new_card = cards[current_id++];
+	new_card = proto;
+	new_card.my_id = current_id - 1;
+	new_card.current_state = card_state::destroyed;
+	//TODO: create and link the table for this card in lua
+	return current_id - 1;
+}
+
+void card_registry::unreg_card(int id, lua_State* L)
+{
+	//TODO: unref the cards table in lua
+	cards.erase(id);
 }
