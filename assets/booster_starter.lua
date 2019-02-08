@@ -3,7 +3,6 @@ function next_cell( pos,dir )
 	return pos+dir2
 end
 deck={}
-print("Actually running lua code!")
 deck.strike={
 	--main
 	name="Strike",
@@ -63,46 +62,38 @@ deck.move={
 	move=true,
 
 	use=function (card,game)
-		for i=1,3 do
-			print("::::",i)
-			local cards=game.get_cards(i)
-			for i,v in ipairs(cards) do
-				print(i,v)
-			end
-		end
 		local path=game.target_path(game.player:pos(),card.range)
 		game.move(game.player,path)
 		card:destroy()
 	end
 }
-deck.wound={
+--alternative way of writing the same
+local wound={
 	name="Wound",
 	description="Loose game if 3 are in hand at the end of turn",
 	wound=true,
-	use=function ( card,game )
-		local cards=game.get_cards(2)
-		--[[ TODO: need card_ref comparisons
-		local tmp_cards={}
-		for i,v in ipairs(cards) do
-			if not v.wound then
-				table.insert(tmp_cards,v)
-			end
-		end
-		--]]
-		local tmp_cards=cards
-
-		local card_choice=game.target_card(tmp_cards)
-		print(card_choice)
-		for i,v in ipairs(card_choice) do
-			print(i,v)
-		end
-
-		for i,v in pairs(getmetatable(card_choice[1])) do
-			print(i,v)
-		end
-		card_choice[1]:destroy()
-
-		card:destroy()
-	end
 }
+function wound:use(game)
+	--get cards from "hand"
+	local cards=game.get_cards(2)
+	--filter cards: you can only choose to destroy non-wounds
+	local tmp_cards={}
+	for i,v in ipairs(cards) do
+		if not v.wound then
+			table.insert(tmp_cards,v)
+		end
+	end
+	--ask which one
+	local card_choice=game.target_card(tmp_cards)
+	--if picked a card (e.g. you can be left with only wound in hand)
+	if #card_choice then
+		--destroy it
+		card_choice[1]:destroy()
+		--destroy self
+		self:destroy() --NOTE when using this way of writing it's called "self" not card
+	end
+end
+
+deck.wound=wound
+
 return deck

@@ -76,9 +76,8 @@ lua_State* card::yieldable_use(lua_State* L)
 	lua_stack_guard g(L,1);
 	//start a lua coroutine. 
 	//This then can get yielded a few times until the effects are all "animated"
-	lua_getregistry(L);
-	lua_getfield(L, -1, "cards");
-	lua_getfield(L, -1, key.c_str());
+	
+	lua_rawgeti(L, LUA_REGISTRYINDEX,my_id);
 	int card_data_pos = lua_gettop(L);
 	print_stack(L);
 	lua_getfield(L, -1, "use");
@@ -91,7 +90,7 @@ lua_State* card::yieldable_use(lua_State* L)
 	//push lua table with this cards "data"
 
 	//copy lua table with global systems (from registry)
-	lua_getfield(L, card_data_pos-2, "system");
+	lua_getfield(L, LUA_REGISTRYINDEX, "system");
 	
 	auto L1 = lua_newthread(L);
 	lua_stack_guard g1(L1,3);
@@ -99,24 +98,42 @@ lua_State* card::yieldable_use(lua_State* L)
 	lua_xmove(L, L1, 3); //transfer everything needed for the fcall
 	printf("L1:\n");
 	print_stack(L1);
-	lua_insert(L, 1);
-	lua_pop(L, 3);
+	lua_pop(L, 1);
+
 	printf("L:\n");
 	print_stack(L);
 	return L1;
 }
+void lua_set_mt_proto_card(lua_State* L, int arg)
+{
+	luaL_checktype(L, arg, LUA_TTABLE);
+	if (luaL_newmetatable(L, "card.proto"))
+	{
+		//constructed by sys init due to ... reasons
+		lua_getfield(L, LUA_REGISTRYINDEX, "_card_moves");
+		lua_pushnil(L);
+		while (lua_next(L, -2))
+		{
+			printf("Adding...\n");
+			lua_pushvalue(L, -2);
+			lua_insert(L, -2);
+			lua_settable(L, -5);
+		}
+		lua_pop(L, 1);
 
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, arg);
+}
 void lua_load_card(lua_State* L, int arg, card& output)
 {
 	lua_stack_guard g(L);
 	lua_pushvalue(L, arg);
 	int p = lua_gettop(L);
-	lua_getregistry(L);
-
-	lua_getfield(L, -1, "cards");
+	
 	lua_pushvalue(L, p);
-	lua_setfield(L, -2, output.key.c_str());
-	lua_pop(L, 2);//pop reg.cards,registry
+	output.my_id = luaL_ref(L, LUA_REGISTRYINDEX);
 
 	lua_getfield(L, p, "name");
 	output.name = lua_tostring(L, -1);
@@ -142,7 +159,7 @@ void lua_load_card(lua_State* L, int arg, card& output)
 		output.type = card_type::wound;
 	lua_pop(L, 1);
 
-	
+	lua_set_mt_proto_card(L, p);
 	lua_pop(L, 1);//pop copy of card
 }
 void lua_load_booster(lua_State * L,int arg,lua_booster& output)
@@ -165,8 +182,7 @@ void lua_load_booster(lua_State * L,int arg,lua_booster& output)
 }
 card_ref lua_tocard_ref(lua_State* L, int arg)
 {
-	
-	lua_rawgeti(L, arg, 1);
+	lua_getfield(L, arg, "_ref_idx");
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 	return card_ref{ id };
@@ -191,52 +207,64 @@ int lua_card_ref_tostring(lua_State* L)
 }
 void lua_push_card_ref(lua_State * L, const card_ref& r)
 {
+	lua_rawgeti(L, LUA_REGISTRYINDEX, r);
+}
+static int index_to_proto(lua_State* L)
+{
+	lua_pushstring(L, "_proto");
+	lua_rawget(L, 1);
+	lua_insert(L, -2);
+
+	lua_gettable(L, -2);
+
+	return 1;
+}
+void new_lua_card(lua_State * L,int proto_id)
+{
 	lua_newtable(L);
 
-	lua_pushinteger(L, r);
-	lua_rawseti(L, -2, 1);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, proto_id);
+	lua_setfield(L, -2, "_proto");
 
 	if (luaL_newmetatable(L, "card.ref"))
 	{
-		//ideal inheritance:
-		//	card.ref
-		//	card data table
-		//	card class data table (i.e. from the luafile)
-		//TODO: unfinished
-		lua_pushcfunction(L, lua_card_ref_tostring);
-		lua_setfield(L, -2, "__tostring");
+		//lua_pushcfunction(L, lua_card_ref_tostring);
+		//lua_setfield(L, -2, "__tostring");
 
-		//constructed by sys init due to ... reasons
-		lua_getfield(L, LUA_REGISTRYINDEX, "_card_moves");
-		lua_pushnil(L);
-		while (lua_next(L, -2))
-		{
-			printf("Adding...\n");
-			lua_pushvalue(L, -2);
-			lua_insert(L, -2);
-			lua_settable(L, -5);
-		}
-		lua_pop(L, 1);
+		
 
 		//FIXME: actually hide the values inside the table... Prob. should just use the userdata way either way...
-		lua_pushvalue(L, -1);
+		//lua_pushvalue(L, -1);
+		//lua_setfield(L, -2, "__index");
+
+		lua_pushcfunction(L, index_to_proto); //TODO: @NOTNICE maybe there is more elegant way?
 		lua_setfield(L, -2, "__index");
+
+		//lua_setmetatable(L, -2);
 	}
 	lua_setmetatable(L, -2);
 }
-
 int card_registry::new_card(const card & proto, lua_State* L)
 {
-	auto& new_card = cards[current_id++];
+	//TODO: crazy idea. Store cards in a lua userdata... It's probably a hash table anyways...
+
+	new_lua_card(L,proto.my_id);
+	lua_pushvalue(L, -1);
+	int current_id=luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_pushinteger(L, current_id);
+	lua_setfield(L, -2, "_ref_idx");
+	lua_pop(L, 1);
+
+	auto& new_card = cards[current_id];
 	new_card = proto;
-	new_card.my_id = current_id - 1;
+	new_card.my_id = current_id;
 	new_card.current_state = card_state::destroyed;
-	//TODO: create and link the table for this card in lua
-	return current_id - 1;
+
+	return current_id;
 }
 
 void card_registry::unreg_card(int id, lua_State* L)
 {
-	//TODO: unref the cards table in lua
+	luaL_unref(L, LUA_REGISTRYINDEX, cards[id].my_id);
 	cards.erase(id);
 }

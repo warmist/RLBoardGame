@@ -78,7 +78,6 @@ struct card
 //TODO: @REFACTOR - merge with lua_booster? add new_card(string name)
 struct card_registry
 {
-	int current_id = 0;
 	std::unordered_map<int, card> cards;
 
 	int new_card(const card& proto,lua_State* L);
