@@ -65,7 +65,7 @@ struct card
 	//USE
 	//actual function is in lua
 	lua_State* yieldable_use(lua_State* L);
-
+	lua_State* yieldable_turn_end(lua_State* L);
 
 	bool is_warn_ap = false;
 	sf::Clock warn_ap;

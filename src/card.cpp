@@ -71,38 +71,37 @@ void card::render(console & c, int x, int y)
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc, v3f(1, 1, 1), back_color);
 }
 #include "lua_helper.hpp"
-lua_State* card::yieldable_use(lua_State* L)
+lua_State* yieldable_func(lua_State* L, const char* fname)
 {
-	lua_stack_guard g(L,1);
+	lua_stack_guard g(L, 1);
 	//start a lua coroutine. 
 	//This then can get yielded a few times until the effects are all "animated"
-	
-	lua_rawgeti(L, LUA_REGISTRYINDEX,my_id);
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, my_id);
 	int card_data_pos = lua_gettop(L);
-	print_stack(L);
-	lua_getfield(L, -1, "use");
+	lua_getfield(L, -1, fname);
 	if (!lua_isfunction(L, -1))
 	{
 		return nullptr;
 	}
-	lua_pushvalue(L, card_data_pos); //copy card data (i.e. card class?)
-	//TODO: sort of card class, not actual card data here :|
-	//push lua table with this cards "data"
-
+	lua_pushvalue(L, card_data_pos);
 	//copy lua table with global systems (from registry)
 	lua_getfield(L, LUA_REGISTRYINDEX, "system");
-	
+
 	auto L1 = lua_newthread(L);
-	lua_stack_guard g1(L1,3);
+	lua_stack_guard g1(L1, 3);
 	lua_insert(L, lua_gettop(L) - 3); //move thread under args+function
 	lua_xmove(L, L1, 3); //transfer everything needed for the fcall
-	printf("L1:\n");
-	print_stack(L1);
 	lua_pop(L, 1);
-
-	printf("L:\n");
-	print_stack(L);
 	return L1;
+}
+lua_State* card::yieldable_use(lua_State* L)
+{
+	return yieldable_func(L, "use");
+}
+lua_State * card::yieldable_turn_end(lua_State * L)
+{
+	return yieldable_func(L, "turn_end");
 }
 void lua_set_mt_proto_card(lua_State* L, int arg)
 {
@@ -114,7 +113,6 @@ void lua_set_mt_proto_card(lua_State* L, int arg)
 		lua_pushnil(L);
 		while (lua_next(L, -2))
 		{
-			printf("Adding...\n");
 			lua_pushvalue(L, -2);
 			lua_insert(L, -2);
 			lua_settable(L, -5);

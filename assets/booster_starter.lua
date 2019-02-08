@@ -65,6 +65,9 @@ deck.move={
 		local path=game.target_path(game.player:pos(),card.range)
 		game.move(game.player,path)
 		card:destroy()
+	end,
+	turn_end=function( card,game )
+		card:destroy()
 	end
 }
 --alternative way of writing the same
