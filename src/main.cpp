@@ -564,27 +564,24 @@ struct game_systems
 };
 
 void exit_state_enemy_turn(game_systems& sys);
-void exit_state_player_turn(game_systems& sys);
+void enter_state_enemy_turn(game_systems& sys);
 void exit_state(game_systems& sys, gui_state s)
 {
 #define HANDLE_STATE(name) if(s==gui_state::name) exit_state_ ## name (sys)
 	HANDLE_STATE(enemy_turn);
-	HANDLE_STATE(player_turn);
 #undef HANDLE_STATE
 }
 void enter_state(game_systems& sys, gui_state s)
 {
-#define HANDLE_STATE(name) if(s==gui_state::name) enter_state_ # name (sys)
-
+#define HANDLE_STATE(name) if(s==gui_state::name) enter_state_ ## name (sys)
+	HANDLE_STATE(enemy_turn);
 #undef HANDLE_STATE
 }
 void push_state(game_systems& g, gui_state s)
 {
 	auto& gs = g.gui_state;
 	assert(gs.current_top < MAX_STATES - 1); //TODO: always assert!
-	auto old_state = g.gui_state.state();
 	gs.state_stack[++gs.current_top] = s;
-	exit_state(g, old_state);
 	enter_state(g, s);
 }
 gui_state pop_state(game_systems& g)
@@ -594,7 +591,6 @@ gui_state pop_state(game_systems& g)
 	gs.current_top--;
 	auto old_state = gs.state_stack[gs.current_top + 1];
 	exit_state(g, old_state);
-	enter_state(g, g.gui_state.state());
 	return old_state;
 }
 void remove_dead_enemies(game_systems& sys)
@@ -648,22 +644,18 @@ void exit_state_enemy_turn(game_systems& sys)
 	auto id = sys.all_cards.new_card(sys.possible_cards["move"], sys.L);
 	hand.push_back(id);
 }
-void exit_state_player_turn(game_systems& sys)
+void enter_state_enemy_turn(game_systems& sys)
 {
 	auto& dis = sys.discard->cards;
 	auto& hand = sys.hand->cards;
 	int count_wound = 0;
 
 	int wound_count = hand.count_wounds();
-	//CANT DO THIS state pushes in exit ;<
+	//CANT DO THIS state pushes here but dunno...
 	if (count_wound >= 3)
 	{
 		
 		push_state(sys, gui_state::lost);
-	}
-	else
-	{
-		push_state(sys, gui_state::enemy_turn);
 	}
 	dis.append(hand);
 	remove_dead_enemies(sys);
@@ -803,6 +795,8 @@ void handle_selecting_path(console& con, game_systems& sys)
 			std::reverse(path.begin(), path.end());
 			lua_push_path(sys.yielded_L, path);
 			sys.first_lua_target_function = false;
+			auto s = pop_state(sys);
+			assert(s == gui_state::selecting_path);
 			resume_card_use(sys,1);
 			return;
 		}
@@ -862,6 +856,8 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 		{
 			lua_push_enemy(sys.yielded_L, choices[selected_id]);
 			sys.first_lua_target_function = false;
+			auto s = pop_state(sys);
+			assert(s == gui_state::selecting_enemy);
 			resume_card_use(sys,1);
 			return;
 		}
@@ -924,6 +920,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 		choices.clear();
 		cancel_card_use(sys);
 		pop_state(sys);
+		return;
 	}
 	bool finish_selection = selected_cards == sys.num_cards_select;
 	if (finish_selection)
@@ -942,13 +939,15 @@ void handle_selecting_card(console& con, game_systems& sys)
 		}
 		sys.first_lua_target_function = false;
 		choices.clear();
+		auto s = pop_state(sys);
+		assert(s == gui_state::selecting_card);
 		resume_card_use(sys, 1);
 		return;
 	}
 }
 void done_yielded_lua(game_systems& sys)
 {
-	pop_state(sys);
+	//pop_state(sys); not actually needed? coz lua is not a state?
 	if (sys.yielded_L)
 	{
 		sys.yielded_L = nullptr;
