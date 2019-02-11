@@ -654,8 +654,13 @@ void enter_state_enemy_turn(game_systems& sys)
 	//CANT DO THIS state pushes here but dunno...
 	if (count_wound >= 3)
 	{
-		
 		push_state(sys, gui_state::lost);
+		return;
+	}
+	for (size_t i = 0; i < dis.ids.size(); i++)
+	{
+		dis[i].yieldable_turn_end(sys.L);
+		omg what to do here??? sanity--
 	}
 	dis.append(hand);
 	remove_dead_enemies(sys);
