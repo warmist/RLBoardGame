@@ -27,67 +27,7 @@ const int view_h = 80;
 
 std::uniform_int_distribution<int> r_color(0, 255);
 std::mt19937_64 global_rand; //used for non important things
-struct state
-{
-	string name;
-	string default_next;
-};
-/*
-	default states:
-		start->round_start->
-			for each force
-				turn start->
-				turn end->
-			round_end->round_start
 
-	special, no normal way to go there:
-		win
-		lose
-*/
-struct state_map
-{
-	std::unordered_map<string, state> data;
-
-	void add_state(const state& s)
-	{
-		data[s.name] = s;
-	}
-	void init_default_states()
-	{
-		add_state(state{ "game_start","round_start" });
-		add_state(state{ "round_start","round_end" });
-		add_state(state{ "round_end","round_start" });
-		add_state(state{ "win","" });
-		add_state(state{ "lose","" });
-	}
-	state next_state(const state& cur_state)
-	{
-		auto n = cur_state.default_next;
-		if (data.count(n))
-		{
-			return data[n];
-		}
-		else
-		{
-			//TODO: other way to handle this?
-			return data["lose"];
-		}
-	}
-	void insert_state(const state& new_state, const string& after)
-	{
-		if (data.count(after) == 0)
-		{
-			//TODO: how to handle this?
-			return;
-		}
-		
-		auto nn = data[after].default_next;
-		data[after].default_next = new_state.name;
-		state tmp_state = new_state;
-		tmp_state.default_next = nn;
-		add_state(tmp_state);
-	}
-};
 char to_hex_char(int c)
 {
 	if (c < 10)
@@ -579,7 +519,17 @@ struct enemy_turn_data
 
 	anim_ptr current_animation=nullptr;
 };
+#define MAX_STATES 16 //should be enough for everybody
+struct game_state_machine
+{
+	gui_state state_stack[MAX_STATES];
+	int current_top = 0;
 
+	game_state_machine() { state_stack[0] = gui_state::player_turn; }
+	void reset() { state_stack[0] = gui_state::player_turn; current_top = 0; }
+
+	gui_state state() const { return state_stack[current_top]; }
+};
 struct game_systems
 {
 	std::mt19937 rand;
@@ -587,7 +537,8 @@ struct game_systems
 
 	e_player* player;
 	map* map;
-	gui_state gui_state = gui_state::player_turn;
+	game_state_machine gui_state;
+	
 	//state specific stuff
 	anim_ptr animation;
 	std::unique_ptr<enemy_turn_data> e_turn;
@@ -611,15 +562,111 @@ struct game_systems
 	int coroutine_ref = LUA_NOREF;
 	lua_booster possible_cards;
 };
-void act_move(card& c, game_systems& g, card_needs_output* nd)
+
+void exit_state_enemy_turn(game_systems& sys);
+void exit_state_player_turn(game_systems& sys);
+void exit_state(game_systems& sys, gui_state s)
 {
-	auto anim= std::make_unique<anim_unit_walk>();
-	anim->path = nd->walkable_path;
-	std::reverse(anim->path.begin(), anim->path.end());
-	anim->walker = g.player;
-	g.animation = std::move(anim);
-	g.animation->start_animation();
-	g.gui_state = gui_state::animating;
+#define HANDLE_STATE(name) if(s==gui_state::name) exit_state_ ## name (sys)
+	HANDLE_STATE(enemy_turn);
+	HANDLE_STATE(player_turn);
+#undef HANDLE_STATE
+}
+void enter_state(game_systems& sys, gui_state s)
+{
+#define HANDLE_STATE(name) if(s==gui_state::name) enter_state_ # name (sys)
+
+#undef HANDLE_STATE
+}
+void push_state(game_systems& g, gui_state s)
+{
+	auto& gs = g.gui_state;
+	assert(gs.current_top < MAX_STATES - 1); //TODO: always assert!
+	auto old_state = g.gui_state.state();
+	gs.state_stack[++gs.current_top] = s;
+	exit_state(g, old_state);
+	enter_state(g, s);
+}
+gui_state pop_state(game_systems& g)
+{
+	auto& gs = g.gui_state;
+	assert(gs.current_top>0); //TODO: assert in release mode too!
+	gs.current_top--;
+	auto old_state = gs.state_stack[gs.current_top + 1];
+	exit_state(g, old_state);
+	enter_state(g, g.gui_state.state());
+	return old_state;
+}
+void remove_dead_enemies(game_systems& sys)
+{
+	sys.map->compact_entities();
+}
+bool draw_card(game_systems& sys)
+{
+	auto& deck = sys.deck->cards;
+	auto& hand = sys.hand->cards;
+	auto& discard = sys.discard->cards;
+	if (deck.size() == 0)
+	{
+		if (discard.size() == 0)
+			return false;
+		else
+		{
+			std::shuffle(discard.ids.begin(), discard.ids.end(), sys.rand);
+			deck.append(discard);
+		}
+	}
+	auto card = deck.ids.front();
+	pop_front(deck.ids);
+	hand.push_back(card);
+	return true;
+}
+void exit_state_enemy_turn(game_systems& sys)
+{
+	remove_dead_enemies(sys);
+
+	auto& hand = sys.hand->cards;
+	auto& discard = sys.discard->cards;
+	//mix in the wounds
+	discard.append(hand);
+	//draw new cards
+	const int hand_draw_count = 5;
+	const int hand_max_count = 7;
+	sys.player->current_ap = sys.player->actions_per_turn;
+
+	int draw_count = std::max(std::min(int(hand_max_count - hand.size()), hand_draw_count), 0);
+	for (int i = 0; i < draw_count; i++)
+	{
+		if (!draw_card(sys))
+		{
+			push_state(sys, gui_state::lost);
+			return;
+		}
+	}
+	//add generated cards
+	//FIXME: might be yielded L here? probably not but still
+	auto id = sys.all_cards.new_card(sys.possible_cards["move"], sys.L);
+	hand.push_back(id);
+}
+void exit_state_player_turn(game_systems& sys)
+{
+	auto& dis = sys.discard->cards;
+	auto& hand = sys.hand->cards;
+	int count_wound = 0;
+
+	int wound_count = hand.count_wounds();
+	//CANT DO THIS state pushes in exit ;<
+	if (count_wound >= 3)
+	{
+		
+		push_state(sys, gui_state::lost);
+	}
+	else
+	{
+		push_state(sys, gui_state::enemy_turn);
+	}
+	dis.append(hand);
+	remove_dead_enemies(sys);
 }
 void done_yielded_lua(game_systems& sys);
 void finish_card_use(game_systems& sys, bool soft_cancel);
@@ -687,104 +734,7 @@ void handle_card_use(bool click,game_systems& g)
 		use_card_actual(card, g);
 	}
 }
-void strike_action(card&,game_systems& g, card_needs_output* needs)
-{
-	auto anim = std::make_unique<anim_enemy_damage>();
-	anim->enemy = static_cast<e_enemy*>(needs->visible_target_unit);
-	anim->damage_to_do = 3;
 
-	g.animation = std::move(anim);
-	g.animation->start_animation();
-	g.gui_state = gui_state::animating;
-}
-void push_action(card&, game_systems& g, card_needs_output* needs)
-{
-	const int move_dist = 3;
-	auto anim = std::make_unique<anim_unit_walk>();
-	auto enemy = static_cast<e_enemy*>(needs->visible_target_unit);
-	anim->walker = enemy;
-	auto& p = anim->path;
-	auto dir = enemy->pos - g.player->pos;
-	auto cpos = enemy->pos;
-	for (int i = 0; i < move_dist; i++)
-	{
-		cpos += dir;
-		if (!g.map->is_passible(cpos.x, cpos.y))
-			break;
-		p.push_back(cpos);
-	}
-	g.animation = std::move(anim);
-	g.animation->start_animation();
-	g.gui_state = gui_state::animating;
-}
-template <typename V>
-void pop_front(V & v)
-{
-	v.erase(v.begin());
-}
-bool draw_card(game_systems& sys)
-{
-	auto& deck = sys.deck->cards;
-	auto& hand = sys.hand->cards;
-	auto& discard = sys.discard->cards;
-	if (deck.size() == 0)
-	{
-		if (discard.size() == 0)
-			return false;
-		else
-		{
-			std::shuffle(discard.ids.begin(), discard.ids.end(),sys.rand);
-			deck.append(discard);
-		}
-	}
-	auto card = deck.ids.front();
-	pop_front(deck.ids);
-	hand.push_back(card);
-	return true;
-}
-void remove_dead_enemies(game_systems& sys)
-{
-	sys.map->compact_entities();
-}
-void end_enemy_turn(game_systems& sys)
-{
-	remove_dead_enemies(sys);
-
-	auto& hand = sys.hand->cards;
-	auto& discard = sys.discard->cards;
-	//mix in the wounds
-	discard.append(hand);
-	//draw new cards
-	const int hand_draw_count = 5;
-	const int hand_max_count = 7;
-	sys.gui_state = gui_state::player_turn;
-	sys.player->current_ap = sys.player->actions_per_turn;
-
-	int draw_count = std::max(std::min(int(hand_max_count- hand.size()),hand_draw_count), 0);
-	for (int i = 0; i < draw_count; i++)
-	{
-		draw_card(sys);
-	}
-	//add generated cards
-	//FIXME: might be yielded L here? probably not but still
-	auto id=sys.all_cards.new_card(sys.possible_cards["move"],sys.L);
-	hand.push_back(id);
-}
-void end_player_turn(game_systems& sys)
-{
-	sys.gui_state = gui_state::enemy_turn;
-	auto& dis = sys.discard->cards;
-	auto& hand = sys.hand->cards;
-	int count_wound = 0;
-
-	int wound_count = hand.count_wounds();
-	if (count_wound >= 3)
-	{
-		sys.gui_state = gui_state::lost;
-	}
-	dis.append(hand);
-	remove_dead_enemies(sys);
-}
 void handle_player_turn(console& con,game_systems& sys)
 {
 	sys.hand->input(con);
@@ -794,6 +744,14 @@ void handle_player_turn(console& con,game_systems& sys)
 	sys.deck->render(con);
 	sys.discard->render(con);
 	sys.hand->render(con);
+	
+	
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
+	{
+		push_state(sys, gui_state::enemy_turn);
+	}
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape))
+		push_state(sys, gui_state::exiting);
 }
 void handle_exiting(console& con, game_systems& sys)
 {
@@ -802,7 +760,7 @@ void handle_exiting(console& con, game_systems& sys)
 	con.set_text_centered(v2i(view_w / 2, exit_h + 1), "(press esc to confirm, anything else - cancel)");
 	if (get_mouse_right())
 	{
-		sys.gui_state = gui_state::player_turn;
+		push_state(sys, gui_state::player_turn);
 	}
 }
 void handle_lost(console& con, game_systems& sys)
@@ -852,7 +810,7 @@ void handle_selecting_path(console& con, game_systems& sys)
 	if (get_mouse_right())
 	{
 		cancel_card_use(sys);
-		sys.gui_state = gui_state::player_turn;
+		pop_state(sys);
 	}
 }
 void handle_selecting_enemy(console& con, game_systems& sys)
@@ -911,7 +869,7 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 	if (get_mouse_right())
 	{
 		cancel_card_use(sys);
-		sys.gui_state = gui_state::player_turn;
+		pop_state(sys);
 	}
 }
 void handle_selecting_card(console& con, game_systems& sys)
@@ -965,7 +923,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 		}
 		choices.clear();
 		cancel_card_use(sys);
-		sys.gui_state = gui_state::player_turn;
+		pop_state(sys);
 	}
 	bool finish_selection = selected_cards == sys.num_cards_select;
 	if (finish_selection)
@@ -990,7 +948,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 }
 void done_yielded_lua(game_systems& sys)
 {
-	sys.gui_state = gui_state::player_turn;
+	pop_state(sys);
 	if (sys.yielded_L)
 	{
 		sys.yielded_L = nullptr;
@@ -1095,7 +1053,7 @@ void handle_animating(console& con, game_systems& sys)
 	}
 	else
 	{
-		sys.gui_state = gui_state::player_turn;
+		pop_state(sys);
 	}
 }
 void handle_enemy_turn(console& con, game_systems& sys)
@@ -1124,7 +1082,7 @@ void handle_enemy_turn(console& con, game_systems& sys)
 	if (edata.current_enemy_turn >= edata.enemies.size())
 	{
 		sys.e_turn.reset();
-		end_enemy_turn(sys);
+		pop_state(sys);
 		return;
 	}
 	if (edata.current_animation)
@@ -1242,7 +1200,7 @@ int lua_sys_damage(lua_State* L)
 
 	sys.animation = std::move(anim);
 	sys.animation->start_animation();
-	sys.gui_state = gui_state::animating;
+	push_state(sys, gui_state::animating);
 	return lua_yield(L,0);
 }
 int lua_sys_move(lua_State* L)
@@ -1258,7 +1216,7 @@ int lua_sys_move(lua_State* L)
 	anim->walker = mover;
 	sys.animation = std::move(anim);
 	sys.animation->start_animation();
-	sys.gui_state = gui_state::animating;
+	push_state(sys, gui_state::animating);
 	
 	return lua_yield(L, 0);
 }
@@ -1270,7 +1228,7 @@ int lua_sys_target_path(lua_State* L)
 	float range = (float)luaL_checknumber(L, 2);
 
 	sys.map->pathfind_field(pos, range);
-	sys.gui_state = gui_state::selecting_path;
+	push_state(sys, gui_state::selecting_path);
 
 	return lua_yield(L, 0);
 }
@@ -1282,7 +1240,7 @@ int lua_sys_target_enemy(lua_State* L)
 	float range = (float)luaL_checknumber(L, 2);
 
 	fill_enemy_choices(pos, range, *sys.map, sys.enemy_choices);
-	sys.gui_state = gui_state::selecting_enemy;
+	push_state(sys, gui_state::selecting_enemy);
 
 	return lua_yield(L, 0);
 }
@@ -1311,7 +1269,7 @@ int lua_sys_target_card(lua_State* L)
 		sys.card_choices.push_back(lua_tocard_ref(L,-1));
 		lua_pop(L, 1);
 	}
-	sys.gui_state = gui_state::selecting_card;
+	push_state(sys, gui_state::selecting_card);
 
 	return lua_yield(L,0);
 }
@@ -1446,11 +1404,6 @@ void game_loop(console& graphics_console, console& text_console)
 		std::random_device rd;
 		sys.rand.seed(rd());
 
-		state_map states;
-		states.init_default_states();
-
-		state current_state = states.data["game_start"];
-
 		card_hand hand;
 		hand.cards.r= &sys.all_cards;
 		hand.hand_gui_y = view_h - 8;
@@ -1547,16 +1500,15 @@ void game_loop(console& graphics_console, console& text_console)
 			auto id = sys.all_cards.new_card(sys.possible_cards["strike"], sys.L);
 			discard.cards.push_back(id);
 		}
-		for (int i = 0; i<8; i++)
+		for (int i = 0; i < 8; i++)
 		{
 			auto id = sys.all_cards.new_card(sys.possible_cards["push"], sys.L);
 			discard.cards.push_back(id);
 		}
-		end_enemy_turn(sys);
-		{
-			auto id = sys.all_cards.new_card(sys.possible_cards["strike"], sys.L);
-			hand.cards.push_back(id);
-		}
+
+		sys.gui_state.reset();
+		exit_state_enemy_turn(sys);//Note: we do "end of enemy turn/start of player turn at the start of game
+
 		while (!sys.restart && window.isOpen())
 		{
 			// Process events
@@ -1570,35 +1522,25 @@ void game_loop(console& graphics_console, console& text_console)
 
 				if (event.type == sf::Event::KeyPressed)
 				{
-					// Escape key: exit
+					//TODO: keypress handling is mixed here and in e.g. player_turn handler. Unmix pls! 
+					//	Also here "KeyPressed" is better (key WAS pressed). In global func isKeyPressed is bad (key IS down?)
 					if (event.key.code == sf::Keyboard::Escape)
 					{
-						if (sys.gui_state == gui_state::exiting || sys.gui_state == gui_state::lost)
+						if (sys.gui_state.state() == gui_state::exiting || sys.gui_state.state() == gui_state::lost)
 							window.close();
-						else if (sys.gui_state == gui_state::player_turn)
-							sys.gui_state = gui_state::exiting;
-						else
-							sys.gui_state = gui_state::player_turn;
 					}
 					else
 					{
-						if (sys.gui_state == gui_state::exiting)
+						if (sys.gui_state.state() == gui_state::exiting)
 						{
-							sys.gui_state = gui_state::player_turn;
+							pop_state(sys);
 						}
-						else if (sys.gui_state == gui_state::lost)
+						else if (sys.gui_state.state() == gui_state::lost)
 						{
 							sys.restart = true;
 						}
 					}
-					if (event.key.code == sf::Keyboard::Space)
-					{
-						current_state = states.next_state(current_state);
-						if (sys.gui_state == gui_state::player_turn)
-						{
-							end_player_turn(sys);
-						}
-					}
+					
 					if (event.key.code == sf::Keyboard::S)
 						save_map(world);
 					if (event.key.code == sf::Keyboard::L)
@@ -1629,7 +1571,7 @@ void game_loop(console& graphics_console, console& text_console)
 			sys.player->render_gui(graphics_console, 0, 0);
 			//state dep. stuff
 #define HSTATE(x) case gui_state:: x: handle_ ## x(graphics_console,sys); break
-			switch (sys.gui_state)
+			switch (sys.gui_state.state())
 			{
 				HSTATE(player_turn);
 				HSTATE(exiting);
@@ -1641,7 +1583,6 @@ void game_loop(console& graphics_console, console& text_console)
 				HSTATE(selecting_card);
 			}
 #undef HSTATE
-			text_console.set_text_centered(v2i(view_w / 2, view_h - 1), current_state.name, v3f(0.4f, 0.5f, 0.5f));
 
 			//draw_asciimap(graphics_console);
 			//if (&text_console != &graphics_console)

@@ -71,13 +71,13 @@ void card::render(console & c, int x, int y)
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc, v3f(1, 1, 1), back_color);
 }
 #include "lua_helper.hpp"
-lua_State* yieldable_func(lua_State* L, const char* fname)
+lua_State* yieldable_func(lua_State* L,int card_id, const char* fname)
 {
 	lua_stack_guard g(L, 1);
 	//start a lua coroutine. 
 	//This then can get yielded a few times until the effects are all "animated"
 
-	lua_rawgeti(L, LUA_REGISTRYINDEX, my_id);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, card_id);
 	int card_data_pos = lua_gettop(L);
 	lua_getfield(L, -1, fname);
 	if (!lua_isfunction(L, -1))
@@ -97,11 +97,11 @@ lua_State* yieldable_func(lua_State* L, const char* fname)
 }
 lua_State* card::yieldable_use(lua_State* L)
 {
-	return yieldable_func(L, "use");
+	return yieldable_func(L, my_id, "use");
 }
 lua_State * card::yieldable_turn_end(lua_State * L)
 {
-	return yieldable_func(L, "turn_end");
+	return yieldable_func(L, my_id, "turn_end");
 }
 void lua_set_mt_proto_card(lua_State* L, int arg)
 {

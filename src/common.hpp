@@ -730,3 +730,9 @@ bool read_file(const char* fname,std::vector<T>& ret)
 }
 
 int str_find(const std::string& v, char f, int start_offset = 0);
+
+template <typename V>
+void pop_front(V & v)
+{
+	v.erase(v.begin());
+}
