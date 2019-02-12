@@ -614,6 +614,10 @@ bool draw_card(game_systems& sys)
 		{
 			std::shuffle(discard.ids.begin(), discard.ids.end(), sys.rand);
 			deck.append(discard);
+
+			//Add hunger each time you shuffle
+			auto id = sys.all_cards.new_card(sys.possible_cards["hunger"], sys.L);
+			discard.push_back(id);
 		}
 	}
 	auto card = deck.ids.front();
@@ -1540,13 +1544,15 @@ void game_loop(console& graphics_console, console& text_console)
 		for (int i = 0; i<15; i++)
 		{
 			auto id = sys.all_cards.new_card(sys.possible_cards["strike"], sys.L);
-			discard.cards.push_back(id);
+			deck.cards.push_back(id);
 		}
 		for (int i = 0; i < 8; i++)
 		{
 			auto id = sys.all_cards.new_card(sys.possible_cards["push"], sys.L);
-			discard.cards.push_back(id);
+			deck.cards.push_back(id);
 		}
+
+		std::shuffle(deck.cards.ids.begin(), deck.cards.ids.end(), sys.rand);
 
 		sys.gui_state.reset();
 		exit_state_enemy_turn(sys);//Note: we do "end of enemy turn/start of player turn at the start of game

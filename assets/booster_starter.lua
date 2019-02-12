@@ -72,12 +72,7 @@ deck.move={
 	end
 }
 --alternative way of writing the same
-local wound={
-	name="Wound",
-	description="Loose game if 3 are in hand at the end of turn",
-	wound=true,
-}
-function wound:use(game)
+function wound_use(self,game)
 	--get cards from "hand"
 	local cards=game.get_cards(2)
 	--filter cards: you can only choose to destroy non-wounds
@@ -94,10 +89,24 @@ function wound:use(game)
 		--destroy it
 		card_choice[1]:destroy()
 		--destroy self
-		self:destroy() --NOTE when using this way of writing it's called "self" not card
+		self:destroy()
 	end
 end
+local wound={
+	name="Wound",
+	--TODO: loose game if 3 in hand should be a hint.
+	description="Loose game if 3 are in hand at the end of turn",
+	wound=true,
+	use=wound_use,
+}
+local hunger={
+	name="Hunger",
+
+	description="Your hunger consumes you. Loose game if any 3 wounds are in hand at the end of the turn",
+	wound=true,
+	use=wound_use,
+}
 
 deck.wound=wound
-
+deck.hunger=hunger
 return deck
