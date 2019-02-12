@@ -154,6 +154,8 @@ void map::render_reachable(console & trg, const v3f& color)
 }
 std::vector<v2i> map::get_path(v2i target,int max_len)
 {
+	//FIXME: enemies ignore enemies?
+	//FIXME: player can walk one tile further then it draws(or see render_reachable)
 	auto& pfr = pathfinding_field_result;
 
 	std::vector<v2i> ret;

@@ -131,6 +131,7 @@ public:
 	}
 	void set_text_boxed(recti box, const std::string& s, v3f foreground = v3f(1, 1, 1), v3f background = v3f(0, 0, 0))
 	{
+		//FIXME: whitespace draws on border?
 		v2i cur_pos = box.pos;
 		int next_ws = std::min(str_find(s, ' '), str_find(s, '\n'));
 		for(int i=0;i<s.size();i++)

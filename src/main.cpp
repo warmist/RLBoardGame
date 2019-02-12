@@ -823,8 +823,9 @@ void handle_selecting_path(console& con, game_systems& sys)
 	}
 	if (get_mouse_right())
 	{
+		auto s = pop_state(sys);
+		assert(s == gui_state::selecting_path);
 		cancel_card_use(sys);
-		pop_state(sys);
 	}
 }
 void handle_selecting_enemy(console& con, game_systems& sys)
@@ -884,8 +885,9 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 	}
 	if (get_mouse_right())
 	{
+		auto s = pop_state(sys);
+		assert(s == gui_state::selecting_enemy);
 		cancel_card_use(sys);
-		pop_state(sys);
 	}
 }
 void handle_selecting_card(console& con, game_systems& sys)
@@ -938,8 +940,9 @@ void handle_selecting_card(console& con, game_systems& sys)
 			c.selected = false;
 		}
 		choices.clear();
+		auto s = pop_state(sys);
+		assert(s == gui_state::selecting_card);
 		cancel_card_use(sys);
-		pop_state(sys);
 		return;
 	}
 	bool finish_selection = selected_cards == sys.num_cards_select;
@@ -1188,7 +1191,7 @@ void handle_ending_turn(console& con, game_systems& sys)
 		//FIXME: at this state the card selects and others might be incorrect due to pending card state changes. 
 		// easy fix: block selection/enumeration. But that would limit what could be done.
 		apply_card_state_changes(sys);
-
+		
 		dis.append(hand);
 
 		pop_state(sys);
