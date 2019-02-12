@@ -67,6 +67,7 @@ deck.move={
 		card:destroy()
 	end,
 	turn_end=function( card,game )
+		print("Run burns up")
 		card:destroy()
 	end
 }

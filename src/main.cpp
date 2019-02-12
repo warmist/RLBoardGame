@@ -135,6 +135,8 @@ enum class gui_state
 	enemy_turn,
 	lost,
 	selecting_card,
+	ending_turn,
+	yielded_lua, //actually a pseudo state as it can never reach "handle"
 };
 enum class animation_type
 {
@@ -547,6 +549,7 @@ struct game_systems
 	int num_cards_select;
 	std::vector<card_ref> card_choices;
 	std::vector<card_change_ref> card_state_changes;
+	int ending_current_card;
 	//
 	card_registry all_cards;
 
@@ -559,6 +562,7 @@ struct game_systems
 	//lua stuff
 	lua_State* L = nullptr;
 	lua_State* yielded_L = nullptr;
+	bool lua_card_use = false;
 	int coroutine_ref = LUA_NOREF;
 	lua_booster possible_cards;
 };
@@ -646,29 +650,20 @@ void exit_state_enemy_turn(game_systems& sys)
 }
 void enter_state_enemy_turn(game_systems& sys)
 {
-	auto& dis = sys.discard->cards;
 	auto& hand = sys.hand->cards;
-	int count_wound = 0;
 
 	int wound_count = hand.count_wounds();
 	//CANT DO THIS state pushes here but dunno...
-	if (count_wound >= 3)
+	if (wound_count >= 3)
 	{
 		push_state(sys, gui_state::lost);
 		return;
 	}
-	for (size_t i = 0; i < dis.ids.size(); i++)
-	{
-		dis[i].yieldable_turn_end(sys.L);
-		omg what to do here??? sanity--
-	}
-	dis.append(hand);
-	remove_dead_enemies(sys);
 }
 void done_yielded_lua(game_systems& sys);
 void finish_card_use(game_systems& sys, bool soft_cancel);
 void cancel_card_use(game_systems& sys);
-void resume_card_use(game_systems& sys, int args_pushed = 0)
+void resume_card_lua(game_systems& sys, int args_pushed = 0)
 {
 	if (!sys.yielded_L)
 	{
@@ -682,7 +677,8 @@ void resume_card_use(game_systems& sys, int args_pushed = 0)
 	{
 		//all done running state from lua return to normal working
 		done_yielded_lua(sys);
-		finish_card_use(sys, false);
+		if(sys.lua_card_use)
+			finish_card_use(sys, false);
 		return;
 	}
 	else if (result != LUA_YIELD)
@@ -696,9 +692,23 @@ void use_card_actual(card& card, game_systems& g)
 {
 	g.first_lua_target_function = true; //reset "first target func" condition
 	g.yielded_L = card.yieldable_use(g.L);
+	g.lua_card_use = true;
 	g.coroutine_ref=luaL_ref(g.L, LUA_REGISTRYINDEX);
-
-	resume_card_use(g,2);
+	push_state(g, gui_state::yielded_lua);
+	resume_card_lua(g,2);
+}
+void end_turn_card_actual(card& card, game_systems& g)
+{
+	g.first_lua_target_function = true; //reset "first target func" condition
+	//TODO: actually block all selections? maybe not?
+	g.yielded_L = card.yieldable_turn_end(g.L);
+	if(g.yielded_L)
+	{
+		g.lua_card_use = false;
+		g.coroutine_ref = luaL_ref(g.L, LUA_REGISTRYINDEX);
+		push_state(g, gui_state::yielded_lua);
+		resume_card_lua(g, 2);
+	}
 }
 void fill_enemy_choices(v2i center, float distance,map& m, std::vector<e_enemy*>& enemies)
 {
@@ -745,7 +755,8 @@ void handle_player_turn(console& con,game_systems& sys)
 	
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
 	{
-		push_state(sys, gui_state::enemy_turn);
+		sys.ending_current_card = 0;
+		push_state(sys, gui_state::ending_turn);
 	}
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape))
 		push_state(sys, gui_state::exiting);
@@ -802,7 +813,7 @@ void handle_selecting_path(console& con, game_systems& sys)
 			sys.first_lua_target_function = false;
 			auto s = pop_state(sys);
 			assert(s == gui_state::selecting_path);
-			resume_card_use(sys,1);
+			resume_card_lua(sys,1);
 			return;
 		}
 	}
@@ -863,7 +874,7 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 			sys.first_lua_target_function = false;
 			auto s = pop_state(sys);
 			assert(s == gui_state::selecting_enemy);
-			resume_card_use(sys,1);
+			resume_card_lua(sys,1);
 			return;
 		}
 	}
@@ -946,13 +957,15 @@ void handle_selecting_card(console& con, game_systems& sys)
 		choices.clear();
 		auto s = pop_state(sys);
 		assert(s == gui_state::selecting_card);
-		resume_card_use(sys, 1);
+		resume_card_lua(sys, 1);
 		return;
 	}
 }
 void done_yielded_lua(game_systems& sys)
 {
-	//pop_state(sys); not actually needed? coz lua is not a state?
+	auto s=pop_state(sys);
+	assert(s == gui_state::yielded_lua);
+
 	if (sys.yielded_L)
 	{
 		sys.yielded_L = nullptr;
@@ -1052,7 +1065,9 @@ void handle_animating(console& con, game_systems& sys)
 		{
 			sys.animation.reset();
 			//int args_from_anim = anim->push_lua_args();
-			resume_card_use(sys);
+			auto s = pop_state(sys);
+			assert(s == gui_state::animating);
+			resume_card_lua(sys);
 		}
 	}
 	else
@@ -1156,6 +1171,29 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		edata.current_enemy_turn++;
 		edata.current_enemy_changed = true;
 	}
+}
+void handle_ending_turn(console& con, game_systems& sys)
+{
+	auto& dis = sys.discard->cards;
+	auto& hand = sys.hand->cards;
+
+	if (sys.ending_current_card >= hand.ids.size())
+	{
+		
+		remove_dead_enemies(sys);
+		//FIXME: at this state the card selects and others might be incorrect due to pending card state changes. 
+		// easy fix: block selection/enumeration. But that would limit what could be done.
+		apply_card_state_changes(sys);
+
+		dis.append(hand);
+
+		pop_state(sys);
+		push_state(sys, gui_state::enemy_turn);
+		return;
+	}
+	auto& card = hand[sys.ending_current_card];
+	sys.ending_current_card++;
+	end_turn_card_actual(card, sys);
 }
 //////////////////////////////////////////////////////////////////
 int lua_card_mark_for_state_change(lua_State* L) 
@@ -1585,6 +1623,9 @@ void game_loop(console& graphics_console, console& text_console)
 				HSTATE(animating);
 				HSTATE(enemy_turn);
 				HSTATE(selecting_card);
+				HSTATE(ending_turn);
+
+			case gui_state::yielded_lua: assert(false); break;
 			}
 #undef HSTATE
 

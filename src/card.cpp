@@ -82,6 +82,8 @@ lua_State* yieldable_func(lua_State* L,int card_id, const char* fname)
 	lua_getfield(L, -1, fname);
 	if (!lua_isfunction(L, -1))
 	{
+		g.offset = 0;
+		lua_settop(L, 0);
 		return nullptr;
 	}
 	lua_pushvalue(L, card_data_pos);
