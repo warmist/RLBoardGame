@@ -9,7 +9,6 @@
 #include <cassert>
 /*
 	TODO: 
-		* remove font based rendering
 		* remake with opengl/shader based thing
 
 */
@@ -17,20 +16,15 @@ typedef std::basic_string<unsigned char> ustring;
 
 struct font_descriptor{
     std::string path;
-    bool is_png = false;
     bool is_memory_file = false;
     const unsigned char* data = nullptr;
     size_t data_size = 0;
     int tile_w;
     int tile_h;
-    font_descriptor(const unsigned char* data, size_t size, int tile_w, int tile_h) :is_png(true),is_memory_file(true),data(data), data_size(size), tile_w(tile_w), tile_h(tile_h)
+    font_descriptor(const unsigned char* data, size_t size, int tile_w, int tile_h) :is_memory_file(true),data(data), data_size(size), tile_w(tile_w), tile_h(tile_h)
     {
     }
-    font_descriptor(std::string path, int tile_w, int tile_h) :path(path), is_png(true), tile_w(tile_w), tile_h(tile_h)
-    {
-
-    }
-    font_descriptor(std::string path) :path(path), is_png(false)
+    font_descriptor(std::string path, int tile_w, int tile_h) :path(path), tile_w(tile_w), tile_h(tile_h)
     {
 
     }
