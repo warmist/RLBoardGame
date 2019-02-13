@@ -4,6 +4,13 @@
 #include "lua.hpp"
 #include "common.hpp"
 
+struct lua_wrap
+{
+	lua_State* L=nullptr;
+
+	lua_wrap() { L = luaL_newstate(); }
+	~lua_wrap() { lua_close(L); }
+};
 struct lua_stack_guard
 {
 	int offset;

@@ -1539,8 +1539,8 @@ void game_loop(console& graphics_console, console& text_console)
 		v2i from_click;
 		v2i last_mouse;
 
-		//TODO: defer lua_close
-		sys.L = luaL_newstate();
+		lua_wrap main_lua;
+		sys.L = main_lua.L;
 		init_lua(sys);
 
 
@@ -1646,7 +1646,6 @@ void game_loop(console& graphics_console, console& text_console)
 
 			window.display();
 		}
-		lua_close(sys.L);
 	}
 }
 
