@@ -61,7 +61,7 @@ void card::render(console & c, int x, int y)
 	c.set_char(v2i(x + text_start + int(name.length()), y), tile_nse_t_double, border_color, back_color);
 	c.set_char(v2i(x + text_start - 1, y), tile_nsw_t_double, border_color, back_color);
 	int cur_y = y + 1;
-	if (type != card_type::wound) //TODO: replace with "usable" flag?
+	if (cost_ap != 0)
 	{
 		c.set_text(v2i(x + 2, cur_y), "Cost",v3f(1,1,1),back_color);
 		for (int i = 0; i<cost_ap; i++)
@@ -202,7 +202,9 @@ card_ref lua_check_card_ref(lua_State * L, int arg)
 int lua_card_ref_tostring(lua_State* L)
 {
 	auto ref = lua_tocard_ref(L, 1);
-	lua_pushfstring(L, "card<%d>",ref);//TODO:return this string because more understandable. Maybe a global/registry value? ref.vec->at(ref.id).name.c_str()
+	lua_getfield(L, 1, "name");
+	const char* str=lua_tostring(L, -1);
+	lua_pushfstring(L, "card<%d: %s>",ref,str);
 	return 1;
 }
 void lua_push_card_ref(lua_State * L, const card_ref& r)
@@ -228,8 +230,8 @@ void new_lua_card(lua_State * L,int proto_id)
 
 	if (luaL_newmetatable(L, "card.ref"))
 	{
-		//lua_pushcfunction(L, lua_card_ref_tostring);
-		//lua_setfield(L, -2, "__tostring");
+		lua_pushcfunction(L, lua_card_ref_tostring);
+		lua_setfield(L, -2, "__tostring");
 
 		
 
