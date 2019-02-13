@@ -139,6 +139,7 @@ struct card_vector
 	}
 };
 
+//TODO: @refactor and stuff. lua_booster eventually will have: map(s?) or map pieces, cards (done?), enemies (and their dropped cards?). Maybe even new classes/races.
 #include <unordered_map>
 using lua_booster = std::unordered_map<std::string, card>;
 
