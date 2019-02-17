@@ -69,8 +69,8 @@ std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
 const float path_blocked = std::numeric_limits<float>::infinity();
 const float m_sqrt2f = (float)M_SQRT2;
 const float dist_con8[] = {
-	1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f //real
-	//1,1.5f,1,1.5f,1,1.5f,1,1.5f //dnd also needs(?) floorf in two places
+	//1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f //real
+	1,1.5f,1,1.5f,1,1.5f,1,1.5f //dnd also needs(?) floorf in two places //NOTE: forgot in which places. Probably does not NEED it...
 };
 void map::pathfind_field(v2i target,float range)
 {
@@ -152,21 +152,19 @@ void map::render_reachable(console & trg, const v3f& color)
 				trg.set_back(v2i(x, y), color);
 		}
 }
-std::vector<v2i> map::get_path(v2i target,int max_len)
+std::vector<v2i> map::get_path(v2i target, bool ignore_target,int max_len)
 {
-	//FIXME: enemies ignore enemies?
-	//FIXME: player can walk one tile further then it draws(or see render_reachable)
 	auto& pfr = pathfinding_field_result;
 
 	std::vector<v2i> ret;
-	float cur_dist = pfr(target);
+
+	//don't pathfind if target is inside a wall or sth
+	if(!ignore_target && (pfr(target) == path_blocked))
+		return ret;
 
 	while (true)
 	{
-		//v2i view_coord = map_coord - view_pos;
-		//if (view_rect.is_inside(view_coord))
-		//	trg.set_back(view_coord, color_ok);
-
+		//find direction in which we would step in minimized distance
 		float min_dist = path_blocked;
 		v2i cdelta = v2i(0, 0);
 		for (int i = 0; i < 8; i++)
@@ -183,22 +181,26 @@ std::vector<v2i> map::get_path(v2i target,int max_len)
 				min_dist = cd;
 			}
 		}
+		//can't step anywhere?
 		if (cdelta == v2i(0, 0))
 		{
 			return std::vector<v2i>();
 		}
+		//perform a step
 		ret.push_back(target);
 		if (max_len > 0 && ret.size() >= max_len)
 		{
 			return ret; //quit early as walked MAX_LEN of path
 		}
 		target += cdelta;
+		//somehow stepped out of bounds. Totally an error
 		if (target.x >= pfr.w || target.x < 0 || target.y >= pfr.h || target.y < 0)
 		{
 			assert(false);
 			//TODO: error here?
 			return ret;
 		}
+		//reached the end
 		if (min_dist == 0)
 		{
 			return ret;//done

@@ -798,7 +798,7 @@ void handle_selecting_path(console& con, game_systems& sys)
 	sys.map->render_reachable(con, v3f(0.1f, 0.2f, 0.5f));
 	//render mouse/path to target
 	v2i mouse_pos = get_mouse(con);
-	auto path = sys.map->get_path(mouse_pos + sys.map->view_pos);
+	auto path = sys.map->get_path(mouse_pos + sys.map->view_pos, false);
 	v3f color_fail = v3f(0.8f, 0.2f, 0.4f);
 	sys.map->render_path(con, path, v3f(0.3f, 0.7f, 0.2f));
 
@@ -1100,8 +1100,6 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		}
 		sys.e_turn->current_enemy_turn = 0;
 		sys.e_turn->current_enemy_changed = true;
-
-		sys.map->pathfind_field(sys.player->pos, max_player_distance);
 	}
 	auto& edata = *sys.e_turn;
 	//if none are left, switch the state to player turn
@@ -1139,10 +1137,13 @@ void handle_enemy_turn(console& con, game_systems& sys)
 	bool enemy_done = false;
 	if (!simulated.done_move)
 	{
+		//regen the pathfinding as last enemy could have changed it
+		sys.map->pathfind_field(sys.player->pos, max_player_distance);
+
 		simulated.done_move = true;
 
 		auto anim = std::make_unique<anim_unit_walk>();
-		anim->path = sys.map->get_path(simulated.pos, simulated.move+1);
+		anim->path = sys.map->get_path(simulated.pos, true, simulated.move + 1);
 		anim->walker = &simulated;
 		anim->start_animation();
 
@@ -1512,6 +1513,26 @@ void game_loop(console& graphics_console, console& text_console)
 			auto enemy = new e_enemy;
 
 			enemy->pos = v2i(map_w / 2 -1, map_h / 2);
+			enemy->glyph = 'g';
+			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
+			enemy->type = entity_type::enemy;
+
+			world.entities.emplace_back(enemy);
+		}
+		{
+			auto enemy = new e_enemy;
+
+			enemy->pos = v2i(map_w / 2 - 2, map_h / 2);
+			enemy->glyph = 'g';
+			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
+			enemy->type = entity_type::enemy;
+
+			world.entities.emplace_back(enemy);
+		}
+		{
+			auto enemy = new e_enemy;
+
+			enemy->pos = v2i(map_w / 2 - 3, map_h / 2);
 			enemy->glyph = 'g';
 			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
 			enemy->type = entity_type::enemy;

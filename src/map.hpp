@@ -69,7 +69,7 @@ struct map
     std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
 	void pathfind_field(v2i target,float range);
 	void render_reachable(console& trg,const v3f& color);
-	std::vector<v2i> get_path(v2i target,int max_len=-1);
+	std::vector<v2i> get_path(v2i target, bool ignore_target,int max_len=-1);
 	void render_path(console& trg, const std::vector<v2i>& path, const v3f& color_ok);
 	std::vector<v2i> raycast(v2i pos, v2f dir);
 	std::vector<v2i> raycast_target(v2i pos, v2i target);
