@@ -246,7 +246,7 @@ void line(v2i p0, v2i p1)
 }
 */
 
-
+//FIXME: this sucks! e.g. push, with start+dir*dist pushes too far (on diagonal) and in wrong direction (e.g. -1,-1)
 std::vector<v2i> map::raycast_target(v2i spos, v2i target, bool ignore_start, bool ignore_passible, float& path_distance)
 {
 	auto passible_logic = [&](v2i p) {
