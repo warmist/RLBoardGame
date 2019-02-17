@@ -300,6 +300,12 @@ const int con8_dx[] = {1,1,0,-1,-1,-1, 0, 1};
 const int con8_dy[] = {0,1,1, 1, 0,-1,-1,-1};
 const std::uniform_int<int> rand_con8(0, 7);
 
+const float m_sqrt2f = (float)M_SQRT2;
+const float dist_con8[] = {
+	//1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f //real world distances
+	1,1.5f,1,1.5f,1,1.5f,1,1.5f //dnd also needs(?) floorf in two places in map.cpp //NOTE: forgot in which places. Probably does not NEED it...
+};
+
 int con4_to_con8(int c4);
 //change dx dy pair into direction index
 int dxdy_to_dir(int dx, int dy, bool con8 = true);

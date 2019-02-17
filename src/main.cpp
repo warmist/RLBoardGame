@@ -714,9 +714,10 @@ void end_turn_card_actual(card& card, game_systems& g)
 		resume_card_lua(g, 2);
 	}
 }
-void fill_enemy_choices(v2i center, float distance,map& m, std::vector<e_enemy*>& enemies)
+void fill_enemy_choices(v2i center, float distance,map& m,bool ignore_visibility, std::vector<e_enemy*>& enemies)
 {
 	enemies.clear();
+	
 	float dist_sqr = distance*distance;
 	for (auto& e : m.entities)
 	{
@@ -1289,7 +1290,8 @@ int lua_sys_target_enemy(lua_State* L)
 	v2i pos = luaL_check_v2i(L, 1);
 	float range = (float)luaL_checknumber(L, 2);
 
-	fill_enemy_choices(pos, range, *sys.map, sys.enemy_choices);
+	bool ignore_visibility = false;
+	fill_enemy_choices(pos, range, *sys.map, ignore_visibility, sys.enemy_choices);
 	push_state(sys, gui_state::selecting_enemy);
 
 	return lua_yield(L, 0);
@@ -1300,11 +1302,11 @@ int lua_sys_raycast(lua_State* L)
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
 	v2i pos = luaL_check_v2i(L, 1);
 	v2i target = luaL_check_v2i(L, 2);
-
-	auto ret=sys.map->raycast_target(pos, target);
+	float path_len;
+	auto ret=sys.map->raycast_target(pos, target,true,false,path_len);
 	lua_push_path(L, ret);
-
-	return 1;
+	lua_pushnumber(L, path_len);
+	return 2;
 }
 int lua_sys_target_card(lua_State* L)
 {

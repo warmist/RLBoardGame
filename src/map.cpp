@@ -67,11 +67,6 @@ std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
     return pathfinding(static_layer, f, x, y, tx, ty);
 }
 const float path_blocked = std::numeric_limits<float>::infinity();
-const float m_sqrt2f = (float)M_SQRT2;
-const float dist_con8[] = {
-	//1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f,1,m_sqrt2f //real
-	1,1.5f,1,1.5f,1,1.5f,1,1.5f //dnd also needs(?) floorf in two places //NOTE: forgot in which places. Probably does not NEED it...
-};
 void map::pathfind_field(v2i target,float range)
 {
 	dyn_array2d<float>& distances = pathfinding_field_result;
@@ -218,46 +213,108 @@ void map::render_path(console & trg, const std::vector<v2i>& path, const v3f & c
 			trg.set_back(pv, color_ok);
 	}
 }
-
-std::vector<v2i> map::raycast(v2i pos, v2f dir)
+/*
+void line(v2i p0, v2i p1)
 {
-	v2f floating_part(float(pos.x),float(pos.y));
-	std::vector<v2i> ret;
-	if (dir.dot(dir) < 0.000001)
-		return ret;
-	//resize dir so one direction is 1
-	dir /= (abs(dir.x) > abs(dir.y)) ? (abs(dir.x)) : (abs(dir.y));
-	while(true)
+	v2i delta = p1 - p0;
+	if (p0 == p1)
+		return;
+	bool swap_xy = false;
+	if (abs(delta.y) > abs(delta.x))
 	{
-		pos = v2i((int)floating_part.x, (int)floating_part.y);
-		if (!is_valid_coord(pos) || !is_passible(pos.x, pos.y))
-			return ret;
-		ret.push_back(pos);
-		floating_part += dir;
+		swap_xy = true;
+		std::swap(delta.x, delta.y);
+		std::swap(p0.x, p0.y);
+		std::swap(p1.x, p1.y);
 	}
-	return ret;
-}
-
-std::vector<v2i> map::raycast_target(v2i pos, v2i target)
-{
-	v2f floating_part(float(pos.x), float(pos.y));
-	std::vector<v2i> ret;
-	if (pos == target)
-		return ret;
-	v2i diri = (target - pos);
-	v2f dir(float(diri.x), float(diri.y));
-	dir /= sqrt(dir.dotf(dir));
-	//resize dir so one direction is 1
-	dir /= (abs(dir.x) > abs(dir.y)) ? (abs(dir.x)) : (abs(dir.y));
-	while (true)
+	float deltaerr = abs(float(delta.y) / float(delta.x)); // Assume deltax != 0 (line is not vertical),
+	float error = 0; // No error at start
+	int y = p0.y;
+	for (int x = p0.x; x < p1.x; x++)
 	{
-		pos = v2i((int)floating_part.x, (int)floating_part.y);
-		if (!is_valid_coord(pos) || !is_passible(pos.x, pos.y))
+		if(swap_xy)
+			plot(y, x);
+		else
+			plot(x, y);
+		error += deltaerr;
+		if (error >= 0.5)
+		{
+			y += sign(delta.y) * 1;
+			error -= 1;
+		}
+	}
+}
+*/
+
+
+std::vector<v2i> map::raycast_target(v2i spos, v2i target, bool ignore_start, bool ignore_passible, float& path_distance)
+{
+	auto passible_logic = [&](v2i p) {
+		if (ignore_passible)
+			return true;
+		if (ignore_start && (v2i(p.x,p.y) == spos))
+			return true;
+		return is_passible(p.x,p.y);
+	};
+	std::vector<v2i> ret;
+	v2i delta = target - spos;
+	if (target == spos)
+		return ret;
+	v2i step = v2i(sign(delta.x), 0);
+	bool step_x = true;
+	float deltaerr = abs(float(delta.y) / float(delta.x)); 
+	if (abs(delta.y) > abs(delta.x))
+	{
+		step_x = false;
+		step = v2i(0, sign(delta.y));
+		deltaerr= abs(float(delta.x) / float(delta.y));
+	}
+
+	float error = 0;
+	
+	path_distance = 0;
+	bool first = true;
+	bool step_alt = false;
+	for (v2i pos = spos; ; pos+=step)
+	{
+		
+		if (!is_valid_coord(pos) || !passible_logic(pos))
 			return ret;
+		if (!first) //first step has 0 dx/dy
+		{
+			int dirv = 0;
+			if (step_alt)
+			{
+				dirv=dxdy_to_dir(sign(delta.x), sign(delta.y));
+			}
+			else
+			{
+				if(step_x)
+					dirv=dxdy_to_dir(sign(delta.x), 0);
+				else
+					dirv=dxdy_to_dir(0, sign(delta.y));
+			}
+			path_distance += dist_con8[dirv];
+		}
+		first = false;
 		ret.push_back(pos);
 		if (pos == target)
 			return ret;
-		floating_part += dir;
+		error += deltaerr;
+		if (error >= 0.5)
+		{
+			if (step_x)
+				pos.y += sign(delta.y);
+			else
+				pos.x += sign(delta.x);
+
+			error -= 1;
+			step_alt = true;
+		}
+		else
+		{
+			step_alt = false;
+		}
 	}
 	return ret;
 }

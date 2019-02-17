@@ -10,7 +10,7 @@ deck.strike={
 	description="Perform an attack with a very big sword",
 	--misc
 	attack=3,
-	range=2,
+	range=1.5,
 	--callbacks
 	use=function ( card,game )
 		local target=game.target_enemy(game.player:pos(),card.range)
@@ -25,7 +25,7 @@ deck.push={
 	description="Force a move. Deal damage if can't move",
 
 	attack=1,
-	range=2,
+	range=1.5,
 	distance=3,
 
 	use=function ( card,game )
@@ -41,12 +41,13 @@ deck.push={
 
 		--raycast (i.e. like going straight in that direction)
 		local target_cell=start+dir*card.distance
-		local path=game.raycast(next_cell(start,dir),target_cell)
+		local path,path_len=game.raycast(start,target_cell)
 		--move the unit
 		game.move(target,path)
-		
+
 		--then if the unit could not move ALL the way, hurt it
-		if #path<card.distance-1 then
+		print("moved:",path_len)
+		if path_len<card.distance then
 			game.damage(target,card.attack)
 		end
 		card:discard()
