@@ -165,6 +165,7 @@ void lua_load_card(lua_State* L, int arg, card& output)
 void lua_load_booster(lua_State * L,int arg,lua_booster& output)
 {
 	lua_stack_guard g(L,-1);
+	lua_getfield(L, arg, "cards");
 	lua_pushnil(L);
 	while (lua_next(L, -2))
 	{
@@ -178,7 +179,7 @@ void lua_load_booster(lua_State * L,int arg,lua_booster& output)
 		lua_pop(L, 2);//pop key copy and value
 		
 	}
-	lua_pop(L, 1);//pop 
+	lua_pop(L, 2);//pop 
 }
 card_ref lua_tocard_ref(lua_State* L, int arg)
 {

@@ -110,4 +110,4 @@ local hunger={
 
 deck.wound=wound
 deck.hunger=hunger
-return deck
+return {cards=deck}
