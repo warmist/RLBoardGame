@@ -71,7 +71,7 @@ void card::render(console & c, int x, int y)
 	c.set_text_boxed(recti(x + 2, cur_y, w - 2, h - (cur_y - y) - 1), desc, v3f(1, 1, 1), back_color);
 }
 #include "lua_helper.hpp"
-lua_State* yieldable_func(lua_State* L,int card_id, const char* fname)
+static lua_State* yieldable_func(lua_State* L,int card_id, const char* fname)
 {
 	lua_stack_guard g(L, 1);
 	//start a lua coroutine. 

@@ -407,18 +407,7 @@ public:
 		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
 	}
 };
-struct e_enemy :public entity
-{
-	int current_hp = 3;
-	int max_hp = 3;
-
-	int move = 3;
-	int dmg = 1;
-
-	//simulation stuff
-	bool done_move = false;
-	bool done_dmg = false;
-};
+#include "enemy.hpp"
 
 entity* luaL_check_entity(lua_State*L, int arg) { 
 	
@@ -513,14 +502,7 @@ struct anim_enemy_damage :public anim
 		}
 	}
 };
-struct enemy_turn_data
-{
-	std::vector<e_enemy*> enemies;
-	int current_enemy_turn=0;
-	bool current_enemy_changed = false;
 
-	anim_ptr current_animation=nullptr;
-};
 #define MAX_STATES 16 //should be enough for everybody
 struct game_state_machine
 {
@@ -667,7 +649,7 @@ void enter_state_enemy_turn(game_systems& sys)
 void done_yielded_lua(game_systems& sys);
 void finish_card_use(game_systems& sys, bool soft_cancel);
 void cancel_card_use(game_systems& sys);
-void resume_card_lua(game_systems& sys, int args_pushed = 0)
+void resume_lua(game_systems& sys, int args_pushed = 0)
 {
 	if (!sys.yielded_L)
 	{
@@ -699,7 +681,7 @@ void use_card_actual(card& card, game_systems& g)
 	g.lua_card_use = true;
 	g.coroutine_ref=luaL_ref(g.L, LUA_REGISTRYINDEX);
 	push_state(g, gui_state::yielded_lua);
-	resume_card_lua(g,2);
+	resume_lua(g,2);
 }
 void end_turn_card_actual(card& card, game_systems& g)
 {
@@ -711,7 +693,7 @@ void end_turn_card_actual(card& card, game_systems& g)
 		g.lua_card_use = false;
 		g.coroutine_ref = luaL_ref(g.L, LUA_REGISTRYINDEX);
 		push_state(g, gui_state::yielded_lua);
-		resume_card_lua(g, 2);
+		resume_lua(g, 2);
 	}
 }
 void fill_enemy_choices(v2i center, float distance,map& m,bool ignore_visibility, std::vector<e_enemy*>& enemies)
@@ -818,7 +800,7 @@ void handle_selecting_path(console& con, game_systems& sys)
 			sys.first_lua_target_function = false;
 			auto s = pop_state(sys);
 			assert(s == gui_state::selecting_path);
-			resume_card_lua(sys,1);
+			resume_lua(sys,1);
 			return;
 		}
 	}
@@ -880,7 +862,7 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 			sys.first_lua_target_function = false;
 			auto s = pop_state(sys);
 			assert(s == gui_state::selecting_enemy);
-			resume_card_lua(sys,1);
+			resume_lua(sys,1);
 			return;
 		}
 	}
@@ -965,7 +947,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 		choices.clear();
 		auto s = pop_state(sys);
 		assert(s == gui_state::selecting_card);
-		resume_card_lua(sys, 1);
+		resume_lua(sys, 1);
 		return;
 	}
 }
@@ -1075,7 +1057,7 @@ void handle_animating(console& con, game_systems& sys)
 			//int args_from_anim = anim->push_lua_args();
 			auto s = pop_state(sys);
 			assert(s == gui_state::animating);
-			resume_card_lua(sys);
+			resume_lua(sys);
 		}
 	}
 	else
@@ -1100,7 +1082,6 @@ void handle_enemy_turn(console& con, game_systems& sys)
 			}
 		}
 		sys.e_turn->current_enemy_turn = 0;
-		sys.e_turn->current_enemy_changed = true;
 	}
 	auto& edata = *sys.e_turn;
 	//if none are left, switch the state to player turn
@@ -1110,76 +1091,16 @@ void handle_enemy_turn(console& con, game_systems& sys)
 		pop_state(sys);
 		return;
 	}
-	if (edata.current_animation)
-	{
-		//just animate without thinking too much
-		auto anim = edata.current_animation.get();
 
-		anim->animate_step();
-		if (anim->done_animation())
-		{
-			edata.current_animation.reset();
-		}
-		else
-		{
-			return; //bail early. we've done something already OR we are waiting for next frame!
-		}
-	}
-	auto& simulated = *edata.enemies[edata.current_enemy_turn];
+	auto& enemy = edata.enemies[edata.current_enemy_turn];
+	
+	sys.yielded_L = enemy->yieldable_turn(sys.L);
+	sys.lua_card_use = false;
+	sys.coroutine_ref = luaL_ref(sys.L, LUA_REGISTRYINDEX);
+	push_state(sys, gui_state::yielded_lua);
+	resume_lua(sys, 2);
 
-	if (edata.current_enemy_changed)
-	{
-		edata.current_enemy_changed = false;
-
-		simulated.done_dmg = false;
-		simulated.done_move = false;
-	}
-	//animate it's actions
-	bool enemy_done = false;
-	if (!simulated.done_move)
-	{
-		//regen the pathfinding as last enemy could have changed it
-		sys.map->pathfind_field(sys.player->pos, max_player_distance);
-
-		simulated.done_move = true;
-
-		auto anim = std::make_unique<anim_unit_walk>();
-		anim->path = sys.map->get_path(simulated.pos, true, simulated.move + 1);
-		anim->walker = &simulated;
-		anim->start_animation();
-
-		edata.current_animation= std::move(anim);	
-		return;
-	}
-	else if (!simulated.done_dmg)
-	{
-		simulated.done_dmg = true;
-
-		auto delta = sys.player->pos - simulated.pos;
-		if(abs(delta.x)<=1 && abs(delta.y)<=1)
-		{
-			auto anim = std::make_unique<anim_player_damage>();
-			anim->player = sys.player;
-			anim->player_wound_hand = sys.hand;
-			anim->damage_to_do = simulated.dmg;
-			anim->wound_card = sys.possible_cards["wound"];
-			anim->L = sys.L;
-			anim->start_animation();
-		
-			edata.current_animation = std::move(anim);
-		}
-		return;
-	}
-	else
-	{
-		enemy_done = true;
-	}
-	//switch to the other one
-	if (enemy_done=true)
-	{
-		edata.current_enemy_turn++;
-		edata.current_enemy_changed = true;
-	}
+	edata.current_enemy_turn++;
 }
 void handle_ending_turn(console& con, game_systems& sys)
 {
@@ -1546,8 +1467,6 @@ void game_loop(console& graphics_console, console& text_console)
 
 			enemy->pos = v2i(map_w / 2 - 15, map_h / 2);
 			enemy->glyph = 'G';
-			enemy->dmg = 3;
-			enemy->move = 1;
 			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
 			enemy->type = entity_type::enemy;
 

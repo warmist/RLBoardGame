@@ -51,6 +51,7 @@ SET(PROJECT_HEADERS
     src/miniz.h
 	src/gui.hpp
 	src/card.hpp
+    src/enemy.hpp
     src/lua_helper.hpp
     ${LUA}/lua.hpp
     ${LUA}/lualib.h
@@ -63,6 +64,7 @@ SET(PROJECT_SOURCES
     src/miniz.c
     src/gui.cpp
 	src/card.cpp
+    src/enemy.cpp
 	)
 
 INCLUDE_DIRECTORIES(${LUA})
