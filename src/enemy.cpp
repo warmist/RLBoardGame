@@ -59,10 +59,6 @@ int lua_enemy_ref_tostring(lua_State* L)
 	lua_pushfstring(L, "enemy<%d: %s>", ref, str);
 	return 1;
 }
-void lua_push_card_ref(lua_State * L, const enemy_ref& r)
-{
-	lua_rawgeti(L, LUA_REGISTRYINDEX, r);
-}
 static int index_to_proto(lua_State* L)
 {
 	lua_pushstring(L, "_proto");
@@ -73,7 +69,133 @@ static int index_to_proto(lua_State* L)
 
 	return 1;
 }
+void lua_set_mt_proto_enemy(lua_State* L, int arg)
+{
+	luaL_checktype(L, arg, LUA_TTABLE);
+	if (luaL_newmetatable(L, "enemy.proto"))
+	{
+		//constructed by sys init due to ... reasons
+		lua_getfield(L, LUA_REGISTRYINDEX, "_enemy_moves");
+		lua_pushnil(L);
+		while (lua_next(L, -2))
+		{
+			lua_pushvalue(L, -2);
+			lua_insert(L, -2);
+			lua_settable(L, -5);
+		}
+		lua_pop(L, 1);
 
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, arg);
+}
+
+void lua_read_tile(lua_State * L, int arg, tile_attr& output)
+{
+	lua_pushnumber(L, 1);
+	lua_gettable(L, arg);
+
+	if (lua_isstring(L, -1))
+	{
+		size_t len;
+		auto s = lua_tolstring(L, -1, &len);
+		if(len>0)
+			output.glyph = s[0];
+		else
+		{
+			luaL_error(L, "Invalid glyph: zero sized string");
+		}
+		lua_pop(L, 1);
+	}
+	else if (lua_isnumber(L, -1))
+	{
+		auto n = lua_tonumber(L, -1);
+		output.glyph = (int)n;
+		lua_pop(L, 1);
+	}
+	else
+	{
+		luaL_error(L, "Invalid glyph: not a number or string");
+	}
+
+	lua_pushnumber(L, 2);
+	lua_gettable(L, arg);
+	if (lua_isnumber(L, -1))
+	{
+		float r = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		lua_pushnumber(L, 3);
+		lua_gettable(L, arg);
+		float g = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		lua_pushnumber(L, 4);
+		lua_gettable(L, arg);
+		float b = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		output.color_fore = v3f(r, g, b);
+	}
+	else
+	{
+		output.color_fore = v3f(1, 1, 1);
+		output.color_back = v3f(0, 0, 0);
+		return;
+	}
+
+	lua_pushnumber(L, 5);
+	lua_gettable(L, arg);
+	if (lua_isnumber(L, -1))
+	{
+		float r = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		lua_pushnumber(L, 6);
+		lua_gettable(L, arg);
+		float g = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		lua_pushnumber(L, 7);
+		lua_gettable(L, arg);
+		float b = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		output.color_back = v3f(r, g, b);
+	}
+	else
+	{
+		output.color_back = v3f(0, 0, 0);
+	}
+}
+
+void lua_load_enemy(lua_State* L, int arg, e_enemy& output)
+{
+	lua_stack_guard g(L);
+	lua_pushvalue(L, arg);
+	int p = lua_gettop(L);
+
+	output.type = entity_type::enemy;
+
+	lua_pushvalue(L, p);
+	output.my_id = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	lua_getfield(L, p, "name");
+	output.name = lua_tostring(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, p, "img");
+	lua_read_tile(L, lua_gettop(L), output);
+	lua_pop(L, 1);
+
+	lua_getfield(L, p, "hp");
+	output.max_hp=(int)lua_tonumber(L, -1);
+	lua_pop(L, 1);
+
+	lua_set_mt_proto_enemy(L, p);
+	lua_pop(L, 2);//pop copy of enemy
+}
 void new_lua_enemy(lua_State * L, int proto_id)
 {
 	lua_newtable(L);
@@ -100,7 +222,7 @@ void new_lua_enemy(lua_State * L, int proto_id)
 	lua_setmetatable(L, -2);
 }
 
-int enemy_registry::new_enemy(const e_enemy & proto, lua_State * L)
+e_enemy* enemy_registry::new_enemy(const e_enemy & proto, lua_State * L,map& m)
 {
 	new_lua_enemy(L, proto.my_id);
 	lua_pushvalue(L, -1);
@@ -109,15 +231,18 @@ int enemy_registry::new_enemy(const e_enemy & proto, lua_State * L)
 	lua_setfield(L, -2, "_ref_idx");
 	lua_pop(L, 1);
 
-	auto& new_enemy = enemies[current_id];
-	new_enemy = proto;
-	new_enemy.my_id = current_id;
+	auto new_enemy = new e_enemy;
+	enemies[current_id] = new_enemy;
+	
+	*new_enemy = proto;
+	new_enemy->my_id = current_id;
+	m.entities.emplace_back(new_enemy);
 
-	return current_id;
+	return new_enemy;
 }
 
 void enemy_registry::unreg_enemy(int id, lua_State * L)
 {
-	luaL_unref(L, LUA_REGISTRYINDEX, enemies[id].my_id);
+	luaL_unref(L, LUA_REGISTRYINDEX, enemies[id]->my_id);
 	enemies.erase(id);
 }

@@ -407,7 +407,7 @@ public:
 		//c.set_text(v2i(x + 10, y+1), std::to_string(current_action) + "/" + std::to_string(actions_per_turn));
 	}
 };
-#include "enemy.hpp"
+#include "booster.hpp"
 
 entity* luaL_check_entity(lua_State*L, int arg) { 
 	
@@ -534,6 +534,7 @@ struct game_systems
 	int ending_current_card;
 	//
 	card_registry all_cards;
+	enemy_registry all_enemies;
 
 	card_hand* hand;
 
@@ -546,7 +547,8 @@ struct game_systems
 	lua_State* yielded_L = nullptr;
 	bool lua_card_use = false;
 	int coroutine_ref = LUA_NOREF;
-	lua_booster possible_cards;
+	lua_booster booster;
+	
 };
 
 void exit_state_enemy_turn(game_systems& sys);
@@ -598,7 +600,7 @@ bool draw_card(game_systems& sys)
 			deck.append(discard);
 
 			//Add hunger each time you shuffle
-			auto id = sys.all_cards.new_card(sys.possible_cards["hunger"], sys.L);
+			auto id = sys.all_cards.new_card(sys.booster.cards["hunger"], sys.L);
 			discard.push_back(id);
 		}
 	}
@@ -631,7 +633,7 @@ void exit_state_enemy_turn(game_systems& sys)
 	}
 	//add generated cards
 	//FIXME: might be yielded L here? probably not but still
-	auto id = sys.all_cards.new_card(sys.possible_cards["move"], sys.L);
+	auto id = sys.all_cards.new_card(sys.booster.cards["move"], sys.L);
 	hand.push_back(id);
 }
 void enter_state_enemy_turn(game_systems& sys)
@@ -1158,6 +1160,24 @@ void init_card_moves(game_systems& sys)
 #undef ADD_MOVE_MODE
 	lua_setfield(L, LUA_REGISTRYINDEX, "_card_moves");
 }
+void init_enemy_moves(game_systems& sys)
+{
+	lua_State* L = sys.L;
+	lua_newtable(L);
+	/*
+#define ADD_MOVE_MODE(x) lua_pushlightuserdata(L, &sys);\
+		lua_pushnumber(L,(int)(card_state_change::  x));\
+		lua_pushcclosure(L, lua_card_mark_for_state_change, 2);\
+		lua_setfield(L,-2,#x)
+	ADD_MOVE_MODE(destroy);
+	ADD_MOVE_MODE(discard);
+	ADD_MOVE_MODE(hand);
+	ADD_MOVE_MODE(draw_pile_top);
+	ADD_MOVE_MODE(draw_pile_rand);
+	ADD_MOVE_MODE(draw_pile_bottom);
+#undef ADD_MOVE_MODE*/
+	lua_setfield(L, LUA_REGISTRYINDEX, "_enemy_moves");
+}
 int lua_sys_damage(lua_State* L)
 {
 	printf("Called damage!\n");
@@ -1355,6 +1375,7 @@ void init_lua(game_systems& sys)
 	//my own systems
 	init_lua_system(sys);
 	init_card_moves(sys);
+	init_enemy_moves(sys);
 	//load the cards
 	string path = asset_path + "/booster_starter.lua";
 	luaL_loadfile(L, path.c_str());
@@ -1363,7 +1384,7 @@ void init_lua(game_systems& sys)
 		printf("Error:%s\n", lua_tostring(L, -1));
 		assert(false);
 	}
-	lua_load_booster(L,1, sys.possible_cards);
+	lua_load_booster(L,1, sys.booster);
 }
 
 void game_loop(console& graphics_console, console& text_console)
@@ -1422,56 +1443,7 @@ void game_loop(console& graphics_console, console& text_console)
 
 			world.entities.emplace_back(std::move(ptr_player));
 		}
-		{
-			auto enemy = new e_enemy;
-
-			enemy->pos = v2i(map_w / 2+5, map_h / 2);
-			enemy->glyph = 'g';
-			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
-			enemy->type = entity_type::enemy;
-
-			world.entities.emplace_back(enemy);
-		}
-		{
-			auto enemy = new e_enemy;
-
-			enemy->pos = v2i(map_w / 2 -1, map_h / 2);
-			enemy->glyph = 'g';
-			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
-			enemy->type = entity_type::enemy;
-
-			world.entities.emplace_back(enemy);
-		}
-		{
-			auto enemy = new e_enemy;
-
-			enemy->pos = v2i(map_w / 2 - 2, map_h / 2);
-			enemy->glyph = 'g';
-			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
-			enemy->type = entity_type::enemy;
-
-			world.entities.emplace_back(enemy);
-		}
-		{
-			auto enemy = new e_enemy;
-
-			enemy->pos = v2i(map_w / 2 - 3, map_h / 2);
-			enemy->glyph = 'g';
-			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
-			enemy->type = entity_type::enemy;
-
-			world.entities.emplace_back(enemy);
-		}
-		{
-			auto enemy = new e_enemy;
-
-			enemy->pos = v2i(map_w / 2 - 15, map_h / 2);
-			enemy->glyph = 'G';
-			enemy->color_fore = v3f(0.2f, 0.8f, 0.1f);
-			enemy->type = entity_type::enemy;
-
-			world.entities.emplace_back(enemy);
-		}
+		
 
 		
 		
@@ -1485,15 +1457,40 @@ void game_loop(console& graphics_console, console& text_console)
 		sys.L = main_lua.L;
 		init_lua(sys);
 
+		{
+			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
+
+			enemy->pos = v2i(map_w / 2 + 5, map_h / 2);
+		}
+		{
+			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
+
+			enemy->pos = v2i(map_w / 2 - 1, map_h / 2);
+		}
+		{
+			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
+
+			enemy->pos = v2i(map_w / 2 - 2, map_h / 2);
+		}
+		{
+			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
+
+			enemy->pos = v2i(map_w / 2 - 3, map_h / 2);
+		}
+		{
+			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["gablin"], sys.L, world);
+
+			enemy->pos = v2i(map_w / 2 - 15, map_h / 2);
+		}
 
 		for (int i = 0; i<15; i++)
 		{
-			auto id = sys.all_cards.new_card(sys.possible_cards["strike"], sys.L);
+			auto id = sys.all_cards.new_card(sys.booster.cards["strike"], sys.L);
 			deck.cards.push_back(id);
 		}
 		for (int i = 0; i < 8; i++)
 		{
-			auto id = sys.all_cards.new_card(sys.possible_cards["push"], sys.L);
+			auto id = sys.all_cards.new_card(sys.booster.cards["push"], sys.L);
 			deck.cards.push_back(id);
 		}
 

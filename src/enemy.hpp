@@ -8,6 +8,7 @@ struct e_enemy :public entity
 {
 	int current_hp = 3;
 	int max_hp = 3;
+	std::string name;
 
 	enemy_ref my_id = -1;
 
@@ -22,8 +23,9 @@ struct enemy_turn_data
 
 struct enemy_registry
 {
-	std::unordered_map<int, e_enemy> enemies;
+	std::unordered_map<int, e_enemy*> enemies;
 
-	int new_enemy(const e_enemy& proto, lua_State* L);
+	e_enemy* new_enemy(const e_enemy& proto, lua_State* L,map& m);
 	void unreg_enemy(int id, lua_State* L);
 };
+void lua_load_enemy(lua_State* L, int arg, e_enemy& output);

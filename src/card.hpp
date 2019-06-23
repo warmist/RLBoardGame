@@ -75,6 +75,8 @@ struct card
 	void render(console& c, int x, int y);
 };
 
+void lua_load_card(lua_State* L, int arg, card& output);
+
 //TODO: @REFACTOR - merge with lua_booster? add new_card(string name)
 struct card_registry
 {
@@ -138,12 +140,6 @@ struct card_vector
 		ids.erase(it);
 	}
 };
-
-//TODO: @refactor and stuff. lua_booster eventually will have: map(s?) or map pieces, cards (done?), enemies (and their dropped cards?). Maybe even new classes/races.
-#include <unordered_map>
-using lua_booster = std::unordered_map<std::string, card>;
-
-void lua_load_booster(lua_State* L,int arg,lua_booster& output);
 
 void lua_push_card_ref(lua_State* L, const card_ref& r);
 card_ref lua_tocard_ref(lua_State* L, int arg);

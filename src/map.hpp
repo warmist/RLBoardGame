@@ -12,6 +12,7 @@
 
 struct entity;
 struct map;
+struct lua_State;
 enum class tile_flags
 {
 	none = 0,
@@ -29,7 +30,6 @@ struct tile_attr
 	int glyph;
 	tile_flags flags;
 };
-
 
 enum class entity_type
 {

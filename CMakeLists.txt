@@ -53,6 +53,7 @@ SET(PROJECT_HEADERS
 	src/card.hpp
     src/enemy.hpp
     src/lua_helper.hpp
+    src/booster.hpp
     ${LUA}/lua.hpp
     ${LUA}/lualib.h
 	)
@@ -65,6 +66,7 @@ SET(PROJECT_SOURCES
     src/gui.cpp
 	src/card.cpp
     src/enemy.cpp
+    src/booster.cpp
 	)
 
 INCLUDE_DIRECTORIES(${LUA})

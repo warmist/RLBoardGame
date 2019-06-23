@@ -162,25 +162,7 @@ void lua_load_card(lua_State* L, int arg, card& output)
 	lua_set_mt_proto_card(L, p);
 	lua_pop(L, 1);//pop copy of card
 }
-void lua_load_booster(lua_State * L,int arg,lua_booster& output)
-{
-	lua_stack_guard g(L,-1);
-	lua_getfield(L, arg, "cards");
-	lua_pushnil(L);
-	while (lua_next(L, -2))
-	{
-		lua_pushvalue(L, -2); //copy key
-		const char *key = lua_tostring(L, -1);
-		
-		card tmp;
-		tmp.key = key;
-		lua_load_card(L, -2, tmp);
-		output[key] = tmp;
-		lua_pop(L, 2);//pop key copy and value
-		
-	}
-	lua_pop(L, 2);//pop 
-}
+
 card_ref lua_tocard_ref(lua_State* L, int arg)
 {
 	lua_getfield(L, arg, "_ref_idx");

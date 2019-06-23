@@ -110,4 +110,70 @@ local hunger={
 
 deck.wound=wound
 deck.hunger=hunger
-return {cards=deck}
+
+--[===[ ENEMIES ]===]
+mobs={}
+mobs.goblin={
+	--universal entries
+	name="Goblin",
+	img={'g',0.2, 0.8, 0.1},
+	hp=3,
+	angry_timeout=10,
+	--used by simple turn logic
+	move_dist=3,
+	turn=function (self,game)
+		if not self.angry then
+			for k,v in pairs(self) do
+				print(k,v)
+			end
+			local r=game.raycast(self:pos(),game.player:pos())
+			if r[#r]==game.player.pos then
+				self.angry=self.angry_timeout
+			end
+		end
+		if self.angry then
+			local p=game.pathfind(self.pos,game.player.pos)
+			if #p==0 then
+				self.angry=self.angry-1
+				return
+			else
+				--move up to move_dist and then if you reach player, attack
+				local step_count=math.min(#p,move_dist)
+				for i=1,step_count do
+					
+				end
+			end
+		end
+	end,
+}
+mobs.gablin={
+
+	name="Gablin",
+	img={'G',0.1, 0.9, 0.0},
+	hp=6,
+	angry_timeout=20,
+
+	move_dist=2,
+	turn=function (self,game)
+		if not self.angry then
+			local r=game.raycast(self.pos,game.player.pos)
+			if r[#r]==game.player.pos then
+				self.angry=self.angry_timeout
+			end
+		end
+		if self.angry then
+			local p=game.pathfind(self.pos,game.player.pos)
+			if #p==0 then
+				self.angry=self.angry-1
+				return
+			else
+				--move up to move_dist and then if you reach player, attack
+				local step_count=math.min(#p,move_dist)
+				for i=1,step_count do
+					
+				end
+			end
+		end
+	end,
+}
+return {cards=deck,mobs=mobs}
