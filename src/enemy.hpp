@@ -29,3 +29,6 @@ struct enemy_registry
 	void unreg_enemy(int id, lua_State* L);
 };
 void lua_load_enemy(lua_State* L, int arg, e_enemy& output);
+
+e_enemy* luaL_check_enemy(lua_State*L, int arg); 
+void lua_push_enemy(lua_State*L, e_enemy* ptr);

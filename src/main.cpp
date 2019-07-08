@@ -419,15 +419,15 @@ entity* luaL_check_entity(lua_State*L, int arg) {
 	{
 		return *static_cast<e_player**>(ret);
 	}
-	else if (auto ret = luaL_testudata(L, arg, "entity.enemy"))
+	else if (auto ret = luaL_check_enemy(L, arg))
 	{
-		return *static_cast<e_enemy**>(ret);
+		return ret;
 	}
 	luaL_typerror(L, arg, "entity.*");
 	return nullptr;
 }
 e_player* luaL_check_player(lua_State*L ,int arg){return *static_cast<e_player**>(luaL_checkudata(L, arg, "entity.player"));}
-e_enemy* luaL_check_enemy(lua_State*L, int arg) { return *static_cast<e_enemy**>(luaL_checkudata(L, arg, "entity.enemy")); }
+
 int lua_entity_pos(lua_State*L)
 {
 	auto p = luaL_check_entity(L, 1);
@@ -448,20 +448,7 @@ void lua_push_player(lua_State*L, e_player* ptr)
 	}
 	lua_setmetatable(L, -2);
 }
-void lua_push_enemy(lua_State*L, e_enemy* ptr)
-{
-	auto np = lua_newuserdata(L, sizeof(ptr));
-	*reinterpret_cast< e_enemy**>(np) = ptr;
-	if (luaL_newmetatable(L, "entity.enemy"))
-	{
-		lua_pushcfunction(L, lua_entity_pos);
-		lua_setfield(L, -2, "pos");
 
-		lua_pushvalue(L, -1);
-		lua_setfield(L, -2, "__index");
-	}
-	lua_setmetatable(L, -2);
-}
 
 //enemy receives damage
 struct anim_enemy_damage :public anim
@@ -1244,7 +1231,7 @@ int lua_sys_raycast(lua_State* L)
 	v2i pos = luaL_check_v2i(L, 1);
 	v2i target = luaL_check_v2i(L, 2);
 	float path_len;
-	auto ret=sys.map->raycast_target(pos, target,true,false,path_len);
+	auto ret=sys.map->raycast_target(pos, target,true,false,true,path_len);
 	lua_push_path(L, ret);
 	lua_pushnumber(L, path_len);
 	return 2;

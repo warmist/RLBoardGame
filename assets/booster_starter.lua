@@ -123,17 +123,21 @@ mobs.goblin={
 	move_dist=3,
 	turn=function (self,game)
 		if not self.angry then
-			for k,v in pairs(self) do
-				print(k,v)
+			local r,rl=game.raycast(self:pos(),game.player:pos())
+			print("player:",game.player:pos(),"Len:",rl)
+			print("path:")
+			for i,v in ipairs(r) do
+				print(i,v)
 			end
-			local r=game.raycast(self:pos(),game.player:pos())
-			if r[#r]==game.player.pos then
+			if r[1]==game.player:pos() then
 				self.angry=self.angry_timeout
+				print(self,"became angry")
 			end
 		end
 		if self.angry then
 			local p=game.pathfind(self.pos,game.player.pos)
 			if #p==0 then
+				print(self,"where's the player? angering down")
 				self.angry=self.angry-1
 				return
 			else

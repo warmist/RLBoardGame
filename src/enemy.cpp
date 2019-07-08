@@ -32,31 +32,14 @@ lua_State * e_enemy::yieldable_turn(lua_State * L)
 	return yieldable_func(L, my_id, "turn");
 }
 
-enemy_ref lua_toenemy_ref(lua_State* L, int arg)
-{
-	lua_getfield(L, arg, "_ref_idx");
-	int id = (int)lua_tointeger(L, -1);
-	lua_pop(L, 1);
-	return enemy_ref{ id };
-}
-enemy_ref lua_check_enemy_ref(lua_State * L, int arg)
-{
-	if (lua_getmetatable(L, arg)) {  /* does it have a metatable? */
-		lua_getfield(L, LUA_REGISTRYINDEX, "enemy.ref");  /* get correct metatable */
-		if (lua_rawequal(L, -1, -2)) {  /* does it have the correct mt? */
-			lua_pop(L, 2);  /* remove both metatables */
-			return lua_toenemy_ref(L, arg);
-		}
-	}
-	luaL_typerror(L, arg, "enemy.ref");  /* else error */
-	return enemy_ref();
-}
+
+
 int lua_enemy_ref_tostring(lua_State* L)
 {
-	auto ref = lua_toenemy_ref(L, 1);
+	auto ref = luaL_check_enemy(L, 1);
 	lua_getfield(L, 1, "name");
 	const char* str = lua_tostring(L, -1);
-	lua_pushfstring(L, "enemy<%d: %s>", ref, str);
+	lua_pushfstring(L, "enemy<%p : %s>", ref, str);
 	return 1;
 }
 static int index_to_proto(lua_State* L)
@@ -69,6 +52,7 @@ static int index_to_proto(lua_State* L)
 
 	return 1;
 }
+int lua_entity_pos(lua_State* L);
 void lua_set_mt_proto_enemy(lua_State* L, int arg)
 {
 	luaL_checktype(L, arg, LUA_TTABLE);
@@ -84,6 +68,9 @@ void lua_set_mt_proto_enemy(lua_State* L, int arg)
 			lua_settable(L, -5);
 		}
 		lua_pop(L, 1);
+
+		lua_pushcfunction(L, lua_entity_pos);
+		lua_setfield(L, -2, "pos");
 
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
@@ -196,42 +183,71 @@ void lua_load_enemy(lua_State* L, int arg, e_enemy& output)
 	lua_set_mt_proto_enemy(L, p);
 	lua_pop(L, 2);//pop copy of enemy
 }
-void new_lua_enemy(lua_State * L, int proto_id)
+void new_lua_enemy(lua_State * L, int proto_id, e_enemy* ptr)
 {
-	lua_newtable(L);
+	/*
+		enemy structure from lua:
+			* userdata ptr
+			* lua table for writing (e.g. self.current_anger)
+			* reference to enemy proto if index fails in local table (i.e. class data)
+	*/
+	lua_newtable(L); //this will be my data table
 
-	lua_rawgeti(L, LUA_REGISTRYINDEX, proto_id);
-	lua_setfield(L, -2, "_proto");
+	//lua_rawgeti(L, LUA_REGISTRYINDEX, proto_id);
+	//lua_setfield(L, -2, "_proto");
 
-	if (luaL_newmetatable(L, "enemy.ref"))
+	lua_pushstring(L, "_ptr");
+	lua_pushlightuserdata(L, ptr);
+	lua_rawset(L, -3);
+
+	if (luaL_newmetatable(L, "entity.enemy"))
 	{
 		lua_pushcfunction(L, lua_enemy_ref_tostring);
 		lua_setfield(L, -2, "__tostring");
-
-
 
 		//FIXME: actually hide the values inside the table... Prob. should just use the userdata way either way...
 		//lua_pushvalue(L, -1);
 		//lua_setfield(L, -2, "__index");
 
-		lua_pushcfunction(L, index_to_proto); //TODO: @NOTNICE maybe there is more elegant way?
+		//lua_pushcfunction(L, index_to_proto); //TODO: @NOTNICE maybe there is more elegant way?
+		lua_rawgeti(L, LUA_REGISTRYINDEX, proto_id);
 		lua_setfield(L, -2, "__index");
 
 		//lua_setmetatable(L, -2);
 	}
 	lua_setmetatable(L, -2);
 }
+e_enemy* luaL_check_enemy(lua_State*L, int arg) { 
+	if (!lua_istable(L, arg))
+		return nullptr;
 
+	lua_pushstring(L, "_ptr");
+	lua_rawget(L, arg);
+	if (lua_isnil(L, -1))
+		return nullptr;
+
+	auto ptr = lua_touserdata(L, -1);
+	if (ptr == nullptr)
+		return nullptr;
+
+	return static_cast<e_enemy*>(ptr); 
+}
+void lua_push_enemy(lua_State*L, e_enemy* ptr)
+{
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ptr->my_id);
+}
 e_enemy* enemy_registry::new_enemy(const e_enemy & proto, lua_State * L,map& m)
 {
-	new_lua_enemy(L, proto.my_id);
+	auto new_enemy = new e_enemy;
+	new_lua_enemy(L, proto.my_id, new_enemy);
+	
 	lua_pushvalue(L, -1);
 	int current_id = luaL_ref(L, LUA_REGISTRYINDEX);
 	lua_pushinteger(L, current_id);
 	lua_setfield(L, -2, "_ref_idx");
 	lua_pop(L, 1);
 
-	auto new_enemy = new e_enemy;
+	
 	enemies[current_id] = new_enemy;
 	
 	*new_enemy = proto;
