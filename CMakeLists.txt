@@ -15,6 +15,7 @@ endif()
 
 add_compile_options("/WX")
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+add_definitions(-D_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/")
 

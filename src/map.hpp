@@ -66,7 +66,7 @@ struct map
 	void compact_entities();
 
     void render(console& trg);
-    std::vector<std::pair<int, int>> pathfind(int x, int y, int tx, int ty);
+    std::vector<v2i> pathfind(int x, int y, int tx, int ty);
 	void pathfind_field(v2i target,float range);
 	void render_reachable(console& trg,const v3f& color);
 	std::vector<v2i> get_path(v2i target, bool ignore_target,int max_len=-1);

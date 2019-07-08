@@ -60,9 +60,23 @@ void map::render(console& trg)
         */
 }
 
-std::vector<std::pair<int, int>> map::pathfind(int x, int y, int tx, int ty)
+std::vector<v2i> map::pathfind(int x, int y, int tx, int ty)
 {
-    auto f = [](dyn_array2d<tile_attr>&m, int x, int y){return !test(m(x, y).flags,tile_flags::block_move); };
+	//FIXME: rewrite pathfinding in normal language...
+	bool ignore_passible = false;
+	bool ignore_start = true;
+	bool ignore_target = true;
+
+	auto passible_logic = [&](v2i p) {
+		if (ignore_passible)
+			return true;
+		if (ignore_start && (v2i(p.x, p.y) == v2i(x,y)))
+			return true;
+		if (ignore_target && (v2i(p.x, p.y) == v2i(tx,ty)))
+			return true;
+		return is_passible(p.x, p.y);
+	};
+    auto f = [&](dyn_array2d<tile_attr>&m, int x, int y){return passible_logic(v2i(x,y)); };
 
     return pathfinding(static_layer, f, x, y, tx, ty);
 }

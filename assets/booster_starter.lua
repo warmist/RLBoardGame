@@ -128,14 +128,20 @@ local function simple_enemy_turn( self,game )
 			return
 		else
 			--move up to move_dist and then if you reach player, attack
-			local step_count=math.min(#p,move_dist)
-			for i=1,step_count do
-				print(i,"moving")
-				game.move(self,p[i])
+			local full_path=#p
+			if full_path<=self.move_dist then
+				p[#p]=nil
+			else
+				local step_count=math.min(#p,self.move_dist)
+				for i=step_count+1,#p do
+					print(p[i])
+					p[i]=nil
+				end
 			end
+			game.move(self,p)
 			-- reached player
-			if step_count==move_dist then
-				player:damage(self.damage_card or wound)
+			if full_path<=self.move_dist then
+				game.player:damage(self.damage_card or wound)
 			end
 		end
 	end

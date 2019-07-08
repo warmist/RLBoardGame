@@ -412,12 +412,12 @@ void breadth_first_walk(dyn_array2d<T>& m, callback_t f, int x, int y)
     }
 }
 template <typename callback_t, typename T>
-std::vector<std::pair<int, int>> pathfinding(dyn_array2d<T>& m, callback_t f, int x, int y, int ttx, int tty)
+std::vector<v2i> pathfinding(dyn_array2d<T>& m, callback_t f, int x, int y, int ttx, int tty)
 {
-    std::queue<std::pair<int, int>> bob;// words without consonants are fake and nobody likes them
+    std::queue<v2i> bob;// words without consonants are fake and nobody likes them
     std::unordered_map<v2i,v2i> visited;
 
-    std::vector<std::pair<int, int>> ret;
+    std::vector<v2i> ret;
     if (x == ttx && y == tty)
         return ret;
 
@@ -427,7 +427,7 @@ std::vector<std::pair<int, int>> pathfinding(dyn_array2d<T>& m, callback_t f, in
     if (f(m, x, y))
     {
         //visited[v2i(x, y)] = v2i(-1, -1);
-        bob.push(std::make_pair(x, y));
+        bob.push(v2i(x,y));
     }
     while (bob.size() > 0)
     {
@@ -438,13 +438,13 @@ std::vector<std::pair<int, int>> pathfinding(dyn_array2d<T>& m, callback_t f, in
         {
             int dx = con8_dx[i];
             int dy = con8_dy[i];
-            int tx = dx + pos.first;
-            int ty = dy + pos.second;
+            int tx = dx + pos.x;
+            int ty = dy + pos.y;
             if (tx >= 0 && tx<m.w && ty >= 0 && ty<m.h && visited.count(v2i(tx, ty)) == 0)
                 if (f(m, tx, ty))
                 {
-                    visited[v2i(tx, ty)]=v2i(pos.first,pos.second);
-                    bob.push(std::make_pair(tx, ty));
+                    visited[v2i(tx, ty)]=pos;
+                    bob.push(v2i(tx,ty));
                     if (tx == ttx && ty == tty)
                     {
                         done = true;
@@ -454,11 +454,11 @@ std::vector<std::pair<int, int>> pathfinding(dyn_array2d<T>& m, callback_t f, in
         }
         if (done)
         {
-            ret.push_back(std::make_pair(ttx, tty));
+            ret.push_back(v2i(ttx,tty));
             v2i cp = visited[v2i(ttx, tty)];
             while (visited.count(cp) != 0)
             {
-                ret.push_back(std::make_pair(cp.x, cp.y));
+                ret.push_back(cp);
                 cp = visited[cp];
                 if (cp.x == x && cp.y == y)
                     break;

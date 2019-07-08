@@ -1254,6 +1254,18 @@ int lua_sys_raycast(lua_State* L)
 	lua_pushnumber(L, path_len);
 	return 2;
 }
+int lua_sys_pathfind(lua_State* L)
+{
+	printf("Called pathfind!\n");
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+	v2i pos = luaL_check_v2i(L, 1);
+	v2i target = luaL_check_v2i(L, 2);
+	bool ignore_last = lua_toboolean(L, 3);
+	auto ret=sys.map->pathfind(pos.x, pos.y, target.x, target.y);
+	std::reverse(ret.begin(), ret.end());
+	lua_push_path(L, ret);
+	return 1;
+}
 int lua_sys_target_card(lua_State* L)
 {
 	printf("Called target card!\n");
@@ -1352,6 +1364,7 @@ void init_lua_system(game_systems& sys)
 	ADD_SYS_COMMAND(move);
 	//other
 	ADD_SYS_COMMAND(raycast);
+	ADD_SYS_COMMAND(pathfind);
 	ADD_SYS_COMMAND(get_cards);
 
 	lua_push_player(L, sys.player);
