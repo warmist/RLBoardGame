@@ -53,6 +53,7 @@ static int index_to_proto(lua_State* L)
 	return 1;
 }
 int lua_entity_pos(lua_State* L);
+
 void lua_set_mt_proto_enemy(lua_State* L, int arg)
 {
 	luaL_checktype(L, arg, LUA_TTABLE);
@@ -71,6 +72,12 @@ void lua_set_mt_proto_enemy(lua_State* L, int arg)
 
 		lua_pushcfunction(L, lua_entity_pos);
 		lua_setfield(L, -2, "pos");
+
+		
+		lua_getfield(L, LUA_REGISTRYINDEX, "system");
+		lua_getfield(L, -1, "damage");
+		lua_setfield(L, -3, "damage");
+		lua_pop(L, 1);
 
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");

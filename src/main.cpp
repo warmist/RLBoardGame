@@ -351,7 +351,6 @@ struct anim_player_damage :public anim
 	entity* player;
 	card_hand* player_wound_hand;
 	lua_State* L; 
-	int damage_to_do;
 	card wound_card;
 
 	static const int tween_frames = 10;
@@ -359,7 +358,7 @@ struct anim_player_damage :public anim
 	v3f original_color;
 	int max_steps() override
 	{
-		return (int)damage_to_do*tween_frames;
+		return (int)tween_frames;
 	}
 	v3f tween_func(int s)
 	{
@@ -440,11 +439,8 @@ void lua_push_player(lua_State*L, e_player* ptr)
 	*reinterpret_cast< e_player**>(np) = ptr;
 	if (luaL_newmetatable(L, "entity.player"))
 	{
-		lua_pushcfunction(L, lua_entity_pos);
-		lua_setfield(L, -2, "pos");
-		
-		lua_pushvalue(L, -1);
-		lua_setfield(L, -2, "__index");
+		//in this place it should be inited already
+		assert(false);
 	}
 	lua_setmetatable(L, -2);
 }
@@ -1169,7 +1165,7 @@ int lua_sys_damage(lua_State* L)
 {
 	printf("Called damage!\n");
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
-	
+
 	auto enemy = luaL_check_enemy(L, 1);
 	int damage = luaL_checkint(L, 2);
 
@@ -1180,7 +1176,27 @@ int lua_sys_damage(lua_State* L)
 	sys.animation = std::move(anim);
 	sys.animation->start_animation();
 	push_state(sys, gui_state::animating);
-	return lua_yield(L,0);
+	return lua_yield(L, 0);
+}
+int lua_sys_damage_player(lua_State* L)
+{
+	printf("Called damage player!\n");
+	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+	auto player = luaL_check_player(L, 1);
+	//TODO: arg 2 card
+	//TODO: arg 3 count?
+
+	auto anim = std::make_unique<anim_player_damage>();
+	anim->player = player;
+	anim->wound_card = sys.booster.cards["wound"];
+	anim->player_wound_hand = sys.hand;
+	anim->L = L;
+
+	sys.animation = std::move(anim);
+	sys.animation->start_animation();
+	push_state(sys, gui_state::animating);
+	return lua_yield(L, 0);
 }
 int lua_sys_move(lua_State* L)
 {
@@ -1230,8 +1246,10 @@ int lua_sys_raycast(lua_State* L)
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
 	v2i pos = luaL_check_v2i(L, 1);
 	v2i target = luaL_check_v2i(L, 2);
+	bool ignore_last = lua_toboolean(L, 3);
+
 	float path_len;
-	auto ret=sys.map->raycast_target(pos, target,true,false,true,path_len);
+	auto ret=sys.map->raycast_target(pos, target,true,false, ignore_last,path_len);
 	lua_push_path(L, ret);
 	lua_pushnumber(L, path_len);
 	return 2;
@@ -1294,9 +1312,34 @@ int lua_sys_get_cards(lua_State* L)
 }
 
 #define ADD_SYS_COMMAND(name) lua_pushlightuserdata(L, &sys);lua_pushcclosure(L, lua_sys_## name, 1); lua_setfield(L, -2, # name)
+void init_player_mt(game_systems& sys)
+{
+	auto L = sys.L;
+	if(luaL_newmetatable(L,"entity.player"))
+	{
+		lua_pushcfunction(L, lua_entity_pos);
+		lua_setfield(L, -2, "pos");
+
+		//TODO: this is almost sys_command...
+		lua_pushlightuserdata(L, &sys); 
+		lua_pushcclosure(L, lua_sys_damage_player, 1); 
+		lua_setfield(L, -2, "damage");
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+
+		lua_pop(L, 1);
+	}
+	else 
+	{
+		assert(false);
+		//this should be not innted yet!
+	}
+}
 void init_lua_system(game_systems& sys)
 {
 	auto L = sys.L;
+	init_player_mt(sys);
 	lua_getregistry(L);
 	lua_newtable(L);
 	//player interaction function
@@ -1304,6 +1347,7 @@ void init_lua_system(game_systems& sys)
 	ADD_SYS_COMMAND(target_enemy);
 	ADD_SYS_COMMAND(target_card);
 	//animation functions
+	ADD_SYS_COMMAND(damage_player);
 	ADD_SYS_COMMAND(damage);
 	ADD_SYS_COMMAND(move);
 	//other

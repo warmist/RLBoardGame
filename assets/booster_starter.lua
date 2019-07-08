@@ -14,7 +14,7 @@ deck.strike={
 	--callbacks
 	use=function ( card,game )
 		local target=game.target_enemy(game.player:pos(),card.range)
-		game.damage(target,card.attack)
+		target:damage(card.attack)
 		card:discard()
 	end
 }
@@ -41,14 +41,14 @@ deck.push={
 
 		--raycast (i.e. like going straight in that direction)
 		local target_cell=start+dir*card.distance
-		local path,path_len=game.raycast(start,target_cell)
+		local path,path_len=game.raycast(start,target_cell,false)
 		--move the unit
 		game.move(target,path)
 
 		--then if the unit could not move ALL the way, hurt it
 		print("moved:",path_len)
 		if path_len<card.distance then
-			game.damage(target,card.attack)
+			target:damage(card.attack)
 		end
 		card:discard()
 	end
@@ -112,6 +112,34 @@ deck.wound=wound
 deck.hunger=hunger
 
 --[===[ ENEMIES ]===]
+local function simple_enemy_turn( self,game )
+	if not self.angry then
+		local r,rl=game.raycast(self:pos(),game.player:pos(),true)
+		if r[#r]==game.player:pos() then
+			self.angry=self.angry_timeout
+			print(self,"became angry")
+		end
+	end
+	if self.angry then
+		local p=game.pathfind(self:pos(),game.player:pos())
+		if #p==0 then
+			print(self,"where's the player? angering down")
+			self.angry=self.angry-1
+			return
+		else
+			--move up to move_dist and then if you reach player, attack
+			local step_count=math.min(#p,move_dist)
+			for i=1,step_count do
+				print(i,"moving")
+				game.move(self,p[i])
+			end
+			-- reached player
+			if step_count==move_dist then
+				player:damage(self.damage_card or wound)
+			end
+		end
+	end
+end
 mobs={}
 mobs.goblin={
 	--universal entries
@@ -121,34 +149,7 @@ mobs.goblin={
 	angry_timeout=10,
 	--used by simple turn logic
 	move_dist=3,
-	turn=function (self,game)
-		if not self.angry then
-			local r,rl=game.raycast(self:pos(),game.player:pos())
-			print("player:",game.player:pos(),"Len:",rl)
-			print("path:")
-			for i,v in ipairs(r) do
-				print(i,v)
-			end
-			if r[1]==game.player:pos() then
-				self.angry=self.angry_timeout
-				print(self,"became angry")
-			end
-		end
-		if self.angry then
-			local p=game.pathfind(self.pos,game.player.pos)
-			if #p==0 then
-				print(self,"where's the player? angering down")
-				self.angry=self.angry-1
-				return
-			else
-				--move up to move_dist and then if you reach player, attack
-				local step_count=math.min(#p,move_dist)
-				for i=1,step_count do
-					
-				end
-			end
-		end
-	end,
+	turn=simple_enemy_turn,
 }
 mobs.gablin={
 
@@ -158,26 +159,6 @@ mobs.gablin={
 	angry_timeout=20,
 
 	move_dist=2,
-	turn=function (self,game)
-		if not self.angry then
-			local r=game.raycast(self.pos,game.player.pos)
-			if r[#r]==game.player.pos then
-				self.angry=self.angry_timeout
-			end
-		end
-		if self.angry then
-			local p=game.pathfind(self.pos,game.player.pos)
-			if #p==0 then
-				self.angry=self.angry-1
-				return
-			else
-				--move up to move_dist and then if you reach player, attack
-				local step_count=math.min(#p,move_dist)
-				for i=1,step_count do
-					
-				end
-			end
-		end
-	end,
+	turn=simple_enemy_turn,
 }
 return {cards=deck,mobs=mobs}
