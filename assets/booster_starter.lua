@@ -83,12 +83,15 @@ function wound_use(self,game)
 			table.insert(tmp_cards,v)
 		end
 	end
-	--ask which one
-	local card_choice=game.target_card(tmp_cards)
+	local burn_count=self.num_cards or 1
+	--ask which one(s)
+	local card_choice=game.target_card(tmp_cards,burn_count)
 	--if picked a card (e.g. you can be left with only wound in hand)
-	if #card_choice then
-		--destroy it
-		card_choice[1]:destroy()
+	if #card_choice==burn_count then
+		for i,v in ipairs(card_choice) do
+			--destroy it
+			v:destroy()
+		end
 		--destroy self
 		self:destroy()
 	end
@@ -107,10 +110,17 @@ local hunger={
 	wound=true,
 	use=wound_use,
 }
-
+local major_wound={
+	name="Head wound",
+	description="You've been hit in the head. Loose game if 3 are in hand at the end of turn.",
+	wound=true,
+	--same wound_use but uses up 2 cards!
+	use=wound_use,
+	num_cards=2
+}
 deck.wound=wound
 deck.hunger=hunger
-
+deck.major_wound=major_wound
 --[===[ ENEMIES ]===]
 local function simple_enemy_turn( self,game )
 	if not self.angry then
@@ -141,7 +151,8 @@ local function simple_enemy_turn( self,game )
 			game.move(self,p)
 			-- reached player
 			if full_path<=self.move_dist then
-				game.player:damage(self.damage_card or wound)
+				print(self,"adding card:",self.damage_card)
+				game.player:damage(self.damage_card or 'wound')
 			end
 		end
 	end
@@ -152,7 +163,7 @@ mobs.goblin={
 	name="Goblin",
 	img={'g',0.2, 0.8, 0.1},
 	hp=3,
-	angry_timeout=10,
+	angry_timeout=2,
 	--used by simple turn logic
 	move_dist=3,
 	turn=simple_enemy_turn,
@@ -166,5 +177,6 @@ mobs.gablin={
 
 	move_dist=2,
 	turn=simple_enemy_turn,
+	damage_card="major_wound",
 }
 return {cards=deck,mobs=mobs}

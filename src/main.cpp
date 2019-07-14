@@ -351,7 +351,7 @@ struct anim_player_damage :public anim
 	entity* player;
 	card_hand* player_wound_hand;
 	lua_State* L; 
-	card wound_card;
+	card wound_card; //TODO: this could be card_ref instead
 
 	static const int tween_frames = 10;
 
@@ -505,7 +505,7 @@ struct game_systems
 	e_player* player;
 	map* map;
 	game_state_machine gui_state;
-	
+	bool mouse_down = false;
 	//state specific stuff
 	anim_ptr animation;
 	std::unique_ptr<enemy_turn_data> e_turn;
@@ -860,7 +860,6 @@ void handle_selecting_enemy(console& con, game_systems& sys)
 }
 void handle_selecting_card(console& con, game_systems& sys)
 {
-	assert(sys.num_cards_select == 1);//FIXME: works for only one card selected... for now see below
 	//draw all the possible choices
 	//TODO: simple layout for now
 	int count_w = view_w / card::card_w;
@@ -880,25 +879,27 @@ void handle_selecting_card(console& con, game_systems& sys)
 			current_card = &c;
 	}
 	//handle input
-	if (get_mouse_left())
+	if (get_mouse_left() && !sys.mouse_down)
 	{
 		//figure out where is the mouse (on which card)
-		/* FIXME: this blinks the card too much (each frame). Figure out how to avoid that. 
-			Works because if you are selecting one card you don't need highlight/deselect functions
 		if (current_card && current_card->selected)//unselect if already selected
 		{
 			current_card->selected = false;
 		}
-		else */
-			if(current_card)
+		else 
 		{
-			if (selected_cards < sys.num_cards_select)
+			if (current_card)
 			{
-				current_card->selected = true;
+				if (selected_cards < sys.num_cards_select)
+				{
+					current_card->selected = true;
+				}
 			}
 		}
-	
+		sys.mouse_down = true;
 	}
+	else
+		sys.mouse_down = false;
 	//return selected card list
 	if (get_mouse_right())
 	{
@@ -1033,6 +1034,7 @@ void finish_card_use(game_systems& sys,bool soft_cancel)
 }
 void handle_animating(console& con, game_systems& sys)
 {
+	sys.hand->render(con); //TODO: only render this when animating ENEMY turn
 	if (auto anim = sys.animation.get())
 	{
 		anim->animate_step();
@@ -1184,12 +1186,14 @@ int lua_sys_damage_player(lua_State* L)
 	game_systems& sys = *reinterpret_cast<game_systems*>(lua_touserdata(L, lua_upvalueindex(1)));
 
 	auto player = luaL_check_player(L, 1);
-	//TODO: arg 2 card
+	auto card_name = luaL_optstring(L, 2, "wound"); //TODO: use ref instead of string
 	//TODO: arg 3 count?
 
 	auto anim = std::make_unique<anim_player_damage>();
 	anim->player = player;
-	anim->wound_card = sys.booster.cards["wound"];
+
+	
+	anim->wound_card = sys.booster.cards[card_name];
 	anim->player_wound_hand = sys.hand;
 	anim->L = L;
 
@@ -1501,7 +1505,7 @@ void game_loop(console& graphics_console, console& text_console)
 		sys.L = main_lua.L;
 		init_lua(sys);
 
-		{
+		/*{
 			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
 
 			enemy->pos = v2i(map_w / 2 + 5, map_h / 2);
@@ -1520,7 +1524,7 @@ void game_loop(console& graphics_console, console& text_console)
 			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
 
 			enemy->pos = v2i(map_w / 2 - 3, map_h / 2);
-		}
+		}*/
 		{
 			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["gablin"], sys.L, world);
 
