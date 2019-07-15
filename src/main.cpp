@@ -898,7 +898,7 @@ void handle_selecting_card(console& con, game_systems& sys)
 		}
 		sys.mouse_down = true;
 	}
-	else
+	else if(!get_mouse_left())
 		sys.mouse_down = false;
 	//return selected card list
 	if (get_mouse_right())
