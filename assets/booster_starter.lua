@@ -53,6 +53,35 @@ deck.push={
 		card:discard()
 	end
 }
+deck.bash={
+
+	name="Bash",
+	cost=2,
+	description="Hit one target and someone behind him.!!",
+
+	attack=2,
+	range=1.5,
+	distance=1,
+
+	use=function ( card,game )
+		--first ask which one of enemies you want to hit
+		--TODO: would be nice to have highlight function
+		local target=game.target_enemy(game.player:pos(),card.range)
+
+		--figure out the direction of push
+		local dir=target:pos()-game.player:pos()
+		dir=dir:normalized()
+		local start=target:pos()
+
+		--raycast (i.e. like going straight in that direction)
+		local target_cell=start+dir*card.distance
+		local path,path_len=game.raycast(start,target_cell,false)
+		--damage the unit
+		target:damage(card.attack)
+		--TODO: get unit for secondary damage
+		card:discard()
+	end
+}
 deck.move={
 	name="Run",
 	cost=1,
@@ -60,6 +89,24 @@ deck.move={
 
 	generated=true,
 	range=5,
+	move=true,
+
+	use=function (card,game)
+		local path=game.target_path(game.player:pos(),card.range)
+		game.move(game.player,path)
+		card:destroy()
+	end,
+	turn_end=function( card,game )
+		print("Run burns up")
+		card:destroy()
+	end
+}
+deck.dash={
+	name="Dash",
+	cost=0,
+	description="A short burst of speed",
+
+	range=3,
 	move=true,
 
 	use=function (card,game)
@@ -118,9 +165,31 @@ local major_wound={
 	use=wound_use,
 	num_cards=2
 }
+local daze_wound={
+	name="Dazed",
+	description="You've been lightly dazed. Loose game if 3 are in hand at the end of turn.",
+	wound=true,
+	--same wound_use but uses up 0 cards! - TODO? auto trash?
+	use=function ( self )
+		self:destroy()
+	end
+}
 deck.wound=wound
 deck.hunger=hunger
 deck.major_wound=major_wound
+
+function n_of( tbl ,n )
+	n= n or 1
+	return function ( self,game )
+		local card_choice=game.target_card(tbl,n)
+		if #card_choice==n then
+			for i,v in ipairs(card_choice) do
+				--TODO: create new card here and discard(?) it
+				v:discard()
+			end
+		end
+	end
+end
 --[===[ ENEMIES ]===]
 local function simple_enemy_turn( self,game )
 	if not self.angry then
@@ -167,6 +236,7 @@ mobs.goblin={
 	--used by simple turn logic
 	move_dist=3,
 	turn=simple_enemy_turn,
+	reward=n_of{deck.dash,deck.push},
 }
 mobs.gablin={
 
@@ -178,5 +248,6 @@ mobs.gablin={
 	move_dist=2,
 	turn=simple_enemy_turn,
 	damage_card="major_wound",
+	reward=deck.bash
 }
 return {cards=deck,mobs=mobs}
