@@ -690,11 +690,14 @@ void fill_enemy_choices(v2i center, float distance,map& m,bool ignore_visibility
 	{
 		if (e->type != entity_type::enemy)
 			continue;
+        
 		auto delta = e->pos - center;
 		float v = delta.dotf(delta);
 		if (v <= dist_sqr)
 		{
-			enemies.push_back(static_cast<e_enemy*>(e.get()));
+            auto ee = static_cast<e_enemy*>(e.get());
+                if(ee->current_hp>0)
+			        enemies.push_back(ee);
 		}
 	}
 }
@@ -1505,7 +1508,7 @@ void game_loop(console& graphics_console, console& text_console)
 		sys.L = main_lua.L;
 		init_lua(sys);
 
-		/*{
+		{
 			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
 
 			enemy->pos = v2i(map_w / 2 + 5, map_h / 2);
@@ -1524,7 +1527,7 @@ void game_loop(console& graphics_console, console& text_console)
 			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["goblin"], sys.L, world);
 
 			enemy->pos = v2i(map_w / 2 - 3, map_h / 2);
-		}*/
+		}
 		{
 			auto enemy = sys.all_enemies.new_enemy(sys.booster.enemies["gablin"], sys.L, world);
 
