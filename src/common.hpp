@@ -735,6 +735,7 @@ bool read_file(const char* fname,std::vector<T>& ret)
 	return ok;
 }
 
+bool read_file_buffer(const char* fname, char** buffer, size_t& size);
 int str_find(const std::string& v, char f, int start_offset = 0);
 
 template <typename V>

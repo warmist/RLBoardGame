@@ -55,6 +55,7 @@ SET(PROJECT_HEADERS
     src/enemy.hpp
     src/lua_helper.hpp
     src/booster.hpp
+    src/virtual_fsys.hpp
     ${LUA}/lua.hpp
     ${LUA}/lualib.h
 	)
@@ -68,6 +69,7 @@ SET(PROJECT_SOURCES
 	src/card.cpp
     src/enemy.cpp
     src/booster.cpp
+    src/virtual_fsys.cpp
 	)
 
 INCLUDE_DIRECTORIES(${LUA})

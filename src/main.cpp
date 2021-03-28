@@ -10,10 +10,8 @@
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
 #include <SFML/System.hpp>
-//assets
-#include "asset_cp437_12x12.hpp"
-#include "asset_paul_10x10.hpp"
-#include "asset_vector_lib.hpp"
+
+#include "virtual_fsys.hpp"
 
 #include <array>
 
@@ -1401,6 +1399,26 @@ static int wrap_exceptions(lua_State *L, lua_CFunction f)
 	}
 	return lua_error(L);  // Rethrow as a Lua error.
 }
+int luaL_loadfile_filesys(lua_State* L, const char* fname, const char* name = nullptr)
+{
+    char *buffer;
+    size_t size;
+    bool need_free;
+    if (!vfilesys_load_file(asset_path.c_str(), fname, &buffer, size, need_free))
+    {
+        printf("File not found:%s\n", fname);
+        assert(false);
+        return 0;
+    }
+    if (name == nullptr)
+        name = fname;
+    auto ret=luaL_loadbuffer(L, buffer, size, name);
+    if (need_free)
+    {
+        delete[] buffer;
+    }
+    return ret;
+}
 void init_lua(game_systems& sys)
 {
 	auto L = sys.L;
@@ -1411,14 +1429,14 @@ void init_lua(game_systems& sys)
 	luaJIT_setmode(L, -1, LUAJIT_MODE_WRAPCFUNC | LUAJIT_MODE_ON);
 	lua_pop(L, 1);
 	//init vector library
-	if (luaL_loadbuffer(L, EMB_FILE_vector_lib, EMB_FILE_SIZE_vector_lib, "vector library") != 0)
+	if (luaL_loadfile_filesys(L,"vector_lib.llua")!=0)
 	{
-		printf("Lua load error:%s", lua_tostring(L, -1));
+		printf("Lua load error:%s\n", lua_tostring(L, -1));
 		assert(false);
 	}
 	if (lua_safecall(L, 0, 2) != 0)
 	{
-		printf("Lua error:%s", lua_tostring(L, -1));
+		printf("Lua error:%s\n", lua_tostring(L, -1));
 		assert(false);
 	}
 	lua_setfield(L, LUA_REGISTRYINDEX, "vec2");
@@ -1428,11 +1446,14 @@ void init_lua(game_systems& sys)
 	init_card_moves(sys);
 	init_enemy_moves(sys);
 	//load the cards
-	string path = asset_path + "/booster_starter.lua";
-	luaL_loadfile(L, path.c_str());
+    if (luaL_loadfile_filesys(L, "booster_starter.lua") != 0)
+    {
+        printf("Lua load booster error:%s\n", lua_tostring(L, -1));
+        assert(false);
+    }
 	if (lua_safecall(L,0,LUA_MULTRET) != 0)
 	{
-		printf("Error:%s\n", lua_tostring(L, -1));
+		printf("Booster error:%s\n", lua_tostring(L, -1));
 		assert(false);
 	}
 	lua_load_booster(L,1, sys.booster);
@@ -1647,7 +1668,14 @@ int main(int argc,char **argv)
 	{
 		asset_path = argv[1];
 	}
-    console text_console(view_w, view_h, font_descriptor(reinterpret_cast<const unsigned char*>(EMB_FILE_Paul_10x10), EMB_FILE_SIZE_Paul_10x10, 10, 10));
+    char* buffer;
+    size_t size;
+    bool need_free;
+    vfilesys_load_file(asset_path.c_str(), "paul_10x10.png", &buffer, size, need_free);
+    console text_console(view_w, view_h, font_descriptor(reinterpret_cast<const unsigned char*>(buffer), size, 10, 10));
+    if (need_free)
+        delete[] buffer;
+
 	console& graphics_console = text_console;
 	//console graphics_console(&text_console,(view_w /10)*12, (view_h / 10) * 12, font_descriptor(reinterpret_cast<const unsigned char*>(EMB_FILE_cp437_12x12), EMB_FILE_SIZE_cp437_12x12, 12, 12));
 

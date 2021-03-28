@@ -155,6 +155,23 @@ bool angle_inside(int dx, int dy,float angle_start,float angle_end)
     }
 
 }
+bool read_file_buffer(const char * fname, char ** buffer, size_t & size)
+{
+    auto f = fopen(fname, "rb");
+
+    if (!f)
+        return false;
+
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    *buffer = new char[size];
+
+    bool ok = fread(*buffer, size, 1, f) == 1;
+
+    fclose(f);
+    return ok;
+}
 int str_find(const std::string & v, char f, int start_offset)
 {
 	for (int i = start_offset; i < v.size(); i++)

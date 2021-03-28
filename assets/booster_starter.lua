@@ -236,7 +236,7 @@ mobs.goblin={
 	--used by simple turn logic
 	move_dist=3,
 	turn=simple_enemy_turn,
-	reward=n_of{deck.dash,deck.push},
+	reward=n_of{"dash","duck"},
 }
 mobs.gablin={
 
@@ -248,6 +248,6 @@ mobs.gablin={
 	move_dist=2,
 	turn=simple_enemy_turn,
 	damage_card="major_wound",
-	reward=deck.bash
+	reward="bash",
 }
 return {cards=deck,mobs=mobs}
